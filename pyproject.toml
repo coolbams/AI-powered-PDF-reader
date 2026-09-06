@@ -1,0 +1,20 @@
+[project]
+name = "bud"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "sam", email = "oyerindesamuel207@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "pymupdf4llm>=1.28.2",
+]
+
+[project.scripts]
+bud = "bud:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
