@@ -9,10 +9,11 @@ Bud/
 ├── backend/
 │   ├── app.py              # FastAPI server & routes
 │   ├── Ingestion/
-│   │   └── parser.py       # PDF → Markdown conversion
+│   │   ├── parser.py       # PDF → Markdown + metadata extraction
+│   │   └── chunker.py      # Text splitting into chunks
 │   └── Media/
 │       ├── Uploads/        # Stored PDFs
-│       └── Extracts/       # Generated .md and .json files
+│       └── Extracts/       # Generated .md, .json, and _chunks.json files
 ├── src/bud/__init__.py     # Package entry point
 ├── pyproject.toml          # Project config & dependencies
 └── README.md
@@ -22,10 +23,12 @@ Bud/
 
 1. **Upload** — Send a PDF file to `POST /upload`
 2. **Parse** — The PDF is converted to Markdown page-by-page using `pymupdf4llm`
-3. **Save** — Extracted content is saved to `backend/Media/Extracts/` as:
+3. **Chunk** — Text is split into overlapping chunks using `RecursiveCharacterTextSplitter`
+4. **Save** — Extracted content is saved to `backend/Media/Extracts/` as:
    - `<filename>.md` — full Markdown of the document
    - `<filename>.json` — per-page text with page numbers
-4. **Respond** — Returns the markdown and metadata file paths in JSON
+   - `<filename>_chunks.json` — text chunks with page metadata
+5. **Respond** — Returns the markdown, metadata, and chunks file paths in JSON
 
 ## API Reference
 
@@ -78,7 +81,8 @@ curl -X POST http://localhost:8000/upload \
   "content_type": "application/pdf",
   "saved_to": "backend/Media/Uploads/document.pdf",
   "markdown": "backend/Media/Extracts/document.md",
-  "metadata": "backend/Media/Extracts/document.json"
+  "metadata": "backend/Media/Extracts/document.json",
+  "chunks": "backend/Media/Extracts/document_chunks.json"
 }
 ```
 
@@ -92,6 +96,8 @@ These values are currently hardcoded in `backend/app.py` and `backend/Ingestion/
 | Extracts directory | `backend/Media/Extracts/` | `parser.py` |
 | Max file size | 10 MB | `app.py` |
 | Allowed extensions | `.pdf` | `app.py` |
+| Chunk size | 1000 | `chunker.py` |
+| Chunk overlap | 200 | `chunker.py` |
 
 ## Dependencies
 
@@ -99,6 +105,7 @@ These values are currently hardcoded in `backend/app.py` and `backend/Ingestion/
 |---------|---------|
 | `fastapi[standard]` | Web framework with automatic OpenAPI docs |
 | `pymupdf4llm` | Converts PDF pages to Markdown |
+| `langchain-text-splitters` | Splits text into overlapping chunks |
 
 ## Development
 

@@ -44,7 +44,7 @@ async def upload(file: UploadFile = File(...)):
 
     
     try:
-        result = parser._parse_pdf(input_file)
+        result = parser.parse_pdf(input_file)
     except Exception as e:
          input_file.unlink(missing_ok=True)
          raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
@@ -55,5 +55,6 @@ async def upload(file: UploadFile = File(...)):
         "saved_to": str(input_file),
         "markdown": result["markdown"],
         "metadata": result["metadata"],
+        "chunks": result["chunks"],
     }
 

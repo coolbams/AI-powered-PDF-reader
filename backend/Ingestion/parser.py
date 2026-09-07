@@ -2,14 +2,18 @@ from pathlib import Path
 import pymupdf4llm
 import json
 
+from .chunker import chunk_pages
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-def _parse_pdf(file_path):
+def parse_pdf(file_path):
     file_path = Path(file_path)
     extracts_dir = BASE_DIR / "Media" / "Extracts"
     extracts_dir.mkdir(parents=True, exist_ok=True)
 
     pages = pymupdf4llm.to_markdown(str(file_path), page_chunks=True)
+
+    chunks_results = chunk_pages(pages)
     
     markdown_path = extracts_dir / f"{file_path.stem}.md"
     markdown_path.write_text("\n\n".join(p["text"] for p in pages), encoding="utf-8")
@@ -24,5 +28,17 @@ def _parse_pdf(file_path):
         encoding="utf-8",
     )
 
-    return {"markdown": markdown_path, "metadata": metadata_path}
+    chunks_path = extracts_dir / f"{file_path.stem}_chunks.json"
+
+    data = [
+        {"text": c.page_content, "metadata": c.metadata}
+        for c in chunks_results
+    ]
+
+    chunks_path.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    return {"markdown": markdown_path, "metadata": metadata_path, "chunks": chunks_path}
 
