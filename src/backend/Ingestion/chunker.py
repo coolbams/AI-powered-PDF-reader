@@ -1,8 +1,8 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 
 
-
-def chunk_pages(pages):
+def chunk_pages(pages: list[dict]) -> list[Document]:
     splitter = RecursiveCharacterTextSplitter(
         chunk_size = 1000,
         chunk_overlap=200,

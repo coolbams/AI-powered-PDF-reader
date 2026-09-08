@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from Ingestion import parser
+from .Ingestion import parser
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -30,18 +30,15 @@ async def upload(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 
     content = await file.read()
-    if len(content) == 0:
+    if len(content) == 0: 
          raise HTTPException(status_code=400, detail="File is empty")
     if len(content)  > 10 * 1024 * 1024:
          raise HTTPException(status_code=413, detail="File too large (max 10MB)")
 
-         
-    input_file = UPLOAD_DIR / file.filename
+    safe_name = Path(file.filename).name #
+
+    input_file = UPLOAD_DIR / safe_name
     input_file.write_bytes(content)
-
-    # with open( input_file, 'wb' ) as f:
-    #     f.write(await file.read())
-
     
     try:
         result = parser.parse_pdf(input_file)
@@ -50,11 +47,12 @@ async def upload(file: UploadFile = File(...)):
          raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
     
     return{
-        "filename": file.filename,
+        "filename": safe_name,
         "content_type": file.content_type,
         "saved_to": str(input_file),
         "markdown": result["markdown"],
-        "metadata": result["metadata"],
+        "metadata": result["metadata"], 
         "chunks": result["chunks"],
     }
+
 
