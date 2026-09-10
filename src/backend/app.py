@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
 from .Ingestion import parser
+from .Retrieval.retrieval import Retrieval
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -10,6 +11,8 @@ UPLOAD_DIR = BASE_DIR / "Media" / "Uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(debug=True, title= "Bud's Rag Server")
+
+retrieval = Retrieval()
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,5 +57,10 @@ async def upload(file: UploadFile = File(...)):
         "metadata": result["metadata"], 
         "chunks": result["chunks"],
     }
+
+@app.post("/ask")
+async def query(request: str):
+    results = retrieval.search(request)
+    return {"query": request, "results": results}
 
 

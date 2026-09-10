@@ -13,3 +13,5 @@ wheels/
 **/Media/
 **/Uploads/
 **/Extracts/
+**/Embedding_Model/
+**/Chroma_DB/

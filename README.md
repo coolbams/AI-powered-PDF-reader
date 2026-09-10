@@ -5,13 +5,13 @@ A lightweight PDF ingestion backend that converts PDFs into clean Markdown, chun
 ## Architecture
 
 ```
-┌──────────┐     ┌──────────┐     ┌──────────┐     ┌───────────┐     ┌──────────┐
-│  Upload   │────▶│  Parse   │────▶│  Chunk   │────▶│   Embed   │────▶│  Store   │
-│  (PDF)    │     │ (Markdown)│     │ (Splits) │     │ (Vectors) │     │ (ChromaDB)│
-└──────────┘     └──────────┘     └──────────┘     └───────────┘     └──────────┘
-     │                │                │                  │                │
-     ▼                ▼                ▼                  ▼                ▼
-  app.py          parser.py       chunker.py        embeddings.py     Chroma_DB/
+┌──────────┐     ┌──────────┐     ┌──────────┐     ┌───────────┐     ┌──────────┐     ┌──────────┐
+│  Upload   │────▶│  Parse   │────▶│  Chunk   │────▶│   Embed   │────▶│  Store   │────▶│ Retrieve │
+│  (PDF)    │     │ (Markdown)│     │ (Splits) │     │ (Vectors) │     │ (ChromaDB)│     │ (Search) │
+└──────────┘     └──────────┘     └──────────┘     └───────────┘     └──────────┘     └──────────┘
+     │                │                │                  │                │                │
+     ▼                ▼                ▼                  ▼                ▼                ▼
+  app.py          parser.py       chunker.py        embeddings.py     Chroma_DB/      retrieval.py
 ```
 
 ## Project Structure
@@ -29,8 +29,9 @@ Bud/
 │       │   ├── parser.py       # PDF → Markdown + metadata + chunks
 │       │   ├── chunker.py      # Text splitting into chunks
 │       │   └── embeddings.py   # ChromaDB vector store + embeddings
-│       ├── Orchestrator/
-│       │   └── main.py         # (WIP) Orchestration logic
+│       ├── Retrieval/
+│       │   ├── __init__.py
+│       │   └── retrieval.py    # Semantic search over embedded chunks
 │       └── Media/
 │           ├── Uploads/        # Stored PDFs
 │           └── Extracts/       # Generated .md, .json, and _chunks.json files
@@ -93,6 +94,7 @@ Bud/
 |--------|------------|------------------------------------|
 | GET    | `/`        | Health check — returns `"Bud's Backend is 200"` |
 | POST   | `/upload`  | Upload a PDF for parsing           |
+| POST   | `/ask`     | Query the vector store             |
 
 ### Error Responses
 
@@ -145,7 +147,30 @@ curl -X POST http://localhost:8000/upload \
 
 ## Querying the Vector Store
 
-The `embed_query()` function in `embeddings.py` generates embeddings for user queries:
+### Via API
+
+```bash
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"request": "What are the four laws of behavior change?"}'
+```
+
+**Response:**
+```json
+{
+  "query": "What are the four laws of behavior change?",
+  "results": [
+    {
+      "text": "The Four Laws of Behavior Change provide a simple set of rules...",
+      "metadata": {"page_number": 5},
+      "id": "document_page5_chunk3",
+      "distance": 0.342
+    }
+  ]
+}
+```
+
+### Via Python
 
 ```python
 from backend.Ingestion.embeddings import embeder
@@ -230,7 +255,7 @@ If you upload the same PDF twice, ChromaDB will error due to duplicate IDs. Dele
 | Text chunking | ✅ Done |
 | Embedding generation | ✅ Done |
 | ChromaDB storage | ✅ Done |
-| Query/retrieval | 🔲 WIP (Orchestrator) |
+| Query/retrieval | ✅ Done |
 | RAG response generation | 🔲 WIP |
 
 ## Development

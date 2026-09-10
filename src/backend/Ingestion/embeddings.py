@@ -30,9 +30,9 @@ class EmbeddingModel:
         """Use this for the user's question at retrieval time."""
         prefixed = f"search_query: {query}"
         return self.model.encode([prefixed]).tolist()[0]
+    
 
 embeder = EmbeddingModel()
-
 
 
 
