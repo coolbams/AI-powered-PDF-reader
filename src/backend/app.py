@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .Ingestion import parser
 from .Retrieval.retrieval import Retrieval
+from .Retrieval.prompt_builder import build_prompt
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -60,7 +61,8 @@ async def upload(file: UploadFile = File(...)):
 
 @app.post("/ask")
 async def query(request: str):
-    results = retrieval.search(request)
-    return {"query": request, "results": results}
+    chunks = retrieval.search(request)
+    prompt = build_prompt(request,chunks)
+    return {"query": request, "results": prompt}
 
 
