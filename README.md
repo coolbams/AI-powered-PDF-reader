@@ -1,23 +1,34 @@
-# Bud ✨✨🖥️
+# Bud
 
-A lightweight PDF ingestion backend that converts PDFs into clean Markdown, chunks the text, and embeds it into a vector database using FastAPI, PyMuPDF, and ChromaDB.
+A lightweight RAG (Retrieval-Augmented Generation) backend that ingests PDFs, embeds them into a vector database, and generates answers to questions using an LLM.
 
 ## Architecture
 
 ```
-┌──────────┐     ┌──────────┐     ┌──────────┐     ┌───────────┐     ┌──────────┐     ┌──────────┐
-│  Upload   │────▶│  Parse   │────▶│  Chunk   │────▶│   Embed   │────▶│  Store   │────▶│ Retrieve │
-│  (PDF)    │     │ (Markdown)│     │ (Splits) │     │ (Vectors) │     │ (ChromaDB)│     │ (Search) │
-└──────────┘     └──────────┘     └──────────┘     └───────────┘     └──────────┘     └──────────┘
-     │                │                │                  │                │                │
-     ▼                ▼                ▼                  ▼                ▼                ▼
-  app.py          parser.py       chunker.py        embeddings.py     Chroma_DB/      retrieval.py
+                              INGESTION
+┌──────────┐     ┌──────────┐     ┌──────────┐     ┌───────────┐     ┌──────────┐
+│  Upload   │────▶│  Parse   │────▶│  Chunk   │────▶│   Embed   │────▶│  Store   │
+│  (PDF)    │     │ (Markdown)│     │ (Splits) │     │ (Vectors) │     │ (ChromaDB)│
+└──────────┘     └──────────┘     └──────────┘     └───────────┘     └──────────┘
+                                                                   │
+                              RETRIEVAL & GENERATION               │
+┌──────────┐     ┌──────────────┐     ┌───────────┐               │
+│  Query   │────▶│   Retrieve   │◀────│  Search   │◀──────────────┘
+│ (user)   │     │   (Chunks)   │     │ (Embed)   │
+└──────────┘     └──────┬───────┘     └───────────┘
+                        │
+                        ▼
+               ┌──────────────┐     ┌───────────┐
+               │ Build Prompt │────▶│ Generate  │────▶ Response (LLM)
+               │              │     │  (Groq)   │
+               └──────────────┘     └───────────┘
 ```
 
 ## Project Structure
 
 ```
 Bud/
+├── .env                        # API keys (gitignored)
 ├── src/
 │   ├── bud/
 │   │   └── __init__.py         # Package entry point
@@ -31,7 +42,10 @@ Bud/
 │       │   └── embeddings.py   # ChromaDB vector store + embeddings
 │       ├── Retrieval/
 │       │   ├── __init__.py
-│       │   └── retrieval.py    # Semantic search over embedded chunks
+│       │   ├── retrieval.py    # Semantic search over embedded chunks
+│       │   └── prompt_builder.py  # Builds prompts from retrieved chunks
+│       ├── Generation/
+│       │   └── generate.py     # LLM response generation via Groq
 │       └── Media/
 │           ├── Uploads/        # Stored PDFs
 │           └── Extracts/       # Generated .md, .json, and _chunks.json files
@@ -42,15 +56,26 @@ Bud/
 
 ## How It Works
 
+### Ingestion Pipeline
+
 1. **Upload** — Send a PDF file to `POST /upload`
 2. **Parse** — The PDF is converted to Markdown page-by-page using `pymupdf4llm`
 3. **Chunk** — Text is split into overlapping chunks using `RecursiveCharacterTextSplitter`
-4. **Embed** — Chunks are embedded using `sentence-transformers` and stored in ChromaDB
-5. **Save** — Extracted content is saved to `src/backend/Media/Extracts/` as:
+4. **Embed** — Chunks are embedded using `sentence-transformers` (nomic-embed-text-v1.5)
+5. **Store** — Vectors are stored in ChromaDB for semantic search
+6. **Save** — Extracted content is saved to `src/backend/Media/Extracts/` as:
    - `<filename>.md` — full Markdown of the document
    - `<filename>.json` — per-page text with page numbers
    - `<filename>_chunks.json` — text chunks with page metadata
-6. **Respond** — Returns the markdown, metadata, and chunks file paths in JSON
+
+### Query Pipeline
+
+1. **Query** — User sends a question to `POST /ask`
+2. **Embed Query** — The question is embedded using the same model
+3. **Search** — ChromaDB finds the most relevant chunks (top 5 by default)
+4. **Build Prompt** — Retrieved chunks are formatted into a context-aware prompt
+5. **Generate** — The prompt is sent to Groq's LLM for response generation
+6. **Respond** — Returns the generated answer
 
 ## Output Formats
 
@@ -90,11 +115,11 @@ Bud/
 
 ## API Reference
 
-| Method | Endpoint   | Description                        |
-|--------|------------|------------------------------------|
-| GET    | `/`        | Health check — returns `"Bud's Backend is 200"` |
-| POST   | `/upload`  | Upload a PDF for parsing           |
-| POST   | `/ask`     | Query the vector store             |
+| Method | Endpoint   | Description                                          |
+|--------|------------|------------------------------------------------------|
+| GET    | `/`        | Health check — returns `"Bud's Backend is 200"`      |
+| POST   | `/upload`  | Upload a PDF for parsing and embedding               |
+| POST   | `/ask`     | Ask a question about uploaded documents              |
 
 ### Error Responses
 
@@ -111,11 +136,20 @@ Bud/
 
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/) package manager
+- A [Groq API key](https://console.groq.com/)
 
 ### Install dependencies
 
 ```bash
 uv sync
+```
+
+### Configure environment
+
+Create a `.env` file in the project root:
+
+```bash
+GROQ_API_KEY=your_groq_api_key_here
 ```
 
 ### Run the server
@@ -145,45 +179,23 @@ curl -X POST http://localhost:8000/upload \
 }
 ```
 
-## Querying the Vector Store
-
-### Via API
+### Ask a question
 
 ```bash
-curl -X POST http://localhost:8000/ask \
-  -H "Content-Type: application/json" \
-  -d '{"request": "What are the four laws of behavior change?"}'
+curl -X POST "http://localhost:8000/ask?request=What%20are%20the%20four%20laws%20of%20behavior%20change?"
 ```
 
 **Response:**
 ```json
 {
   "query": "What are the four laws of behavior change?",
-  "results": [
-    {
-      "text": "The Four Laws of Behavior Change provide a simple set of rules...",
-      "metadata": {"page_number": 5},
-      "id": "document_page5_chunk3",
-      "distance": 0.342
-    }
-  ]
+  "results": "The Four Laws of Behavior Change are: 1) Make it obvious, 2) Make it attractive, 3) Make it easy, 4) Make it satisfying."
 }
-```
-
-### Via Python
-
-```python
-from backend.Ingestion.embeddings import embeder
-
-query = "What are the four laws of behavior change?"
-query_embedding = embeder.embed_query(query)
-
-# Use query_embedding to search ChromaDB collection
 ```
 
 ## Configuration
 
-These values are currently hardcoded:
+### Hardcoded Settings
 
 | Setting | Default | Location |
 |---------|---------|----------|
@@ -195,6 +207,16 @@ These values are currently hardcoded:
 | Chunk overlap | 200 | `chunker.py` |
 | Embedding model | `nomic-ai/nomic-embed-text-v1.5` | `embeddings.py` |
 | ChromaDB path | `src/backend/Chroma_DB/` | `embeddings.py` |
+| LLM model | `openai/gpt-oss-20b` | `generate.py` |
+| LLM temperature | 0.3 | `generate.py` |
+| LLM max tokens | 4000 | `generate.py` |
+| Search results | 5 (top_k) | `retrieval.py` |
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GROQ_API_KEY` | Yes | API key for Groq LLM services |
 
 ## Dependencies
 
@@ -206,6 +228,8 @@ These values are currently hardcoded:
 | `sentence-transformers` | Generates embeddings for vector storage |
 | `huggingface-hub` | Model hosting for sentence-transformers |
 | `chromadb` | Vector database for storing embeddings |
+| `groq` | LLM API for response generation |
+| `python-dotenv` | Loads environment variables from `.env` |
 
 ## Embedding Model
 
@@ -233,6 +257,10 @@ from sentence_transformers import SentenceTransformer
 SentenceTransformer("nomic-ai/nomic-embed-text-v1.5", trust_remote_code=True)
 ```
 
+### Groq API errors
+
+Ensure your `GROQ_API_KEY` is set correctly in the `.env` file. Get a free key at [console.groq.com](https://console.groq.com/).
+
 ### ChromaDB data persists between runs
 
 ChromaDB stores data in `src/backend/Chroma_DB/`. To reset the vector store, delete this directory:
@@ -245,6 +273,16 @@ rm -rf src/backend/Chroma_DB/
 
 If you upload the same PDF twice, ChromaDB will error due to duplicate IDs. Delete the existing collection or use a different filename.
 
+## Limitations
+
+| Limitation | Description |
+|------------|-------------|
+| **No duplicate uploads** | Uploading the same PDF twice causes a ChromaDB `UniqueConstraintError`. There is no upsert or deduplication logic. |
+| **PDF only** | Only `.pdf` files are accepted. No support for DOCX, TXT, or other formats. |
+| **Single collection** | All documents are stored in one ChromaDB collection (`my_embedded_pdfs`). No per-document or per-user isolation. |
+| **No streaming** | The `/ask` endpoint returns the full response at once. No streaming support for long answers. |
+| **Synchronous embedding** | The embedding model runs synchronously and blocks the event loop during uploads. |
+
 ## Project Status
 
 | Feature | Status |
@@ -256,7 +294,7 @@ If you upload the same PDF twice, ChromaDB will error due to duplicate IDs. Dele
 | Embedding generation | ✅ Done |
 | ChromaDB storage | ✅ Done |
 | Query/retrieval | ✅ Done |
-| RAG response generation | 🔲 WIP |
+| RAG response generation | ✅ Done |
 
 ## Development
 

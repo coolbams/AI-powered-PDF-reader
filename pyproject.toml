@@ -9,7 +9,9 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "chromadb>=1.0.0",
+    "dotenv>=0.9.9",
     "fastapi[standard]>=0.141.1",
+    "groq>=1.7.0",
     "huggingface-hub>=1.30.0",
     "langchain-text-splitters>=1.1.2",
     "pymupdf4llm>=1.28.2",

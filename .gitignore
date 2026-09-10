@@ -15,3 +15,6 @@ wheels/
 **/Extracts/
 **/Embedding_Model/
 **/Chroma_DB/
+
+# ENV
+*.env

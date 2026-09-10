@@ -9,8 +9,9 @@ def build_prompt(query: str, chunks: list[dict]) -> str:
         for c in chunks
     )
 
-    prompt = f"""Answer the question using only the context below. 
-                If the answer isn't in the context, say so.
+    prompt = f"""Answer ONLY using the information in the provided context. 
+                Do not add information, examples, or structure that isn't explicitly stated in the context. 
+                If the context doesn't cover something, say "the document doesn't specify this.
 
                 Context:
                 {context}
