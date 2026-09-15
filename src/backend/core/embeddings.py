@@ -1,7 +1,11 @@
+import os
 import json
 import chromadb
 from pathlib import Path
+from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
+
+load_dotenv()
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -12,12 +16,15 @@ EMBEDDINGS_MODEL_PATH.mkdir(parents=True, exist_ok=True)
 CHROMA_DB_PATH = BASE_DIR/ "Chroma_DB"
 CHROMA_DB_PATH.mkdir(parents=True, exist_ok=True)
 
+embedding_model = os.getenv("EMBEDDING_MODEL")
+
 
 class EmbeddingModel:
-    def __init__(self, model_name="nomic-ai/nomic-embed-text-v1.5", cache_folder=str(EMBEDDINGS_MODEL_PATH)):
+    def __init__(self, model_name=embedding_model, cache_folder=str(EMBEDDINGS_MODEL_PATH)):
         self.model = SentenceTransformer(
             model_name,
-            trust_remote_code=True,
+            local_files_only=True,
+            trust_remote_code=False,
             cache_folder=cache_folder
         )
 
@@ -32,7 +39,6 @@ class EmbeddingModel:
         return self.model.encode([prefixed]).tolist()[0]
     
 
-embeder = EmbeddingModel()
 
 
 
@@ -48,6 +54,8 @@ def generate_ids(chunks, doc_name):
     return ids
 
 def embed(chunk_file_path: str, filename: str) -> None:
+
+    embeder = EmbeddingModel()
 
     try:
         client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))

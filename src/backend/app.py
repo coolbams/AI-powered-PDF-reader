@@ -1,11 +1,8 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
-from .Ingestion import parser
-from .Retrieval.retrieval import Retrieval
-from .Retrieval.prompt_builder import build_prompt
-from .Generation.generate import generate_response
+from .core import orchestrator
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -14,7 +11,6 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(debug=True, title= "Bud's Rag Server")
 
-retrieval = Retrieval()
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,40 +27,12 @@ def home():
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
 
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+    file_path = await orchestrator.save(file, UPLOAD_DIR)
+    return orchestrator.process(file_path)
 
-    content = await file.read()
-    if len(content) == 0: 
-         raise HTTPException(status_code=400, detail="File is empty")
-    if len(content)  > 10 * 1024 * 1024:
-         raise HTTPException(status_code=413, detail="File too large (max 10MB)")
-
-    safe_name = Path(file.filename).name #
-
-    input_file = UPLOAD_DIR / safe_name
-    input_file.write_bytes(content)
-    
-    try:
-        result = parser.parse_pdf(input_file)
-    except Exception as e:
-         input_file.unlink(missing_ok=True)
-         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
-    
-    return{
-        "filename": safe_name,
-        "content_type": file.content_type,
-        "saved_to": str(input_file),
-        "markdown": result["markdown"],
-        "metadata": result["metadata"], 
-        "chunks": result["chunks"],
-    }
 
 @app.post("/ask")
 async def query(request: str):
-    chunks = retrieval.search(request)
-    prompt = build_prompt(request,chunks)
-    response = generate_response(prompt)
-    return {"query": request, "results": response}
+    return orchestrator.query(request)
 
 

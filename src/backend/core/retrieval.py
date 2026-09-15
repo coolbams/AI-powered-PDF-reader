@@ -1,6 +1,7 @@
 import chromadb
-from ..Ingestion.embeddings import embeder, CHROMA_DB_PATH
+from .embeddings import EmbeddingModel, CHROMA_DB_PATH
 
+embed = EmbeddingModel()
 
 class Retrieval:
     def __init__(self):
@@ -8,7 +9,7 @@ class Retrieval:
         self.collection = self.client.get_or_create_collection("my_embedded_pdfs")
 
     def search(self, query: str, top_k: int = 5) -> list[dict]:
-        query_embedding = embeder.embed_query(query)
+        query_embedding = embed.embed_query(query)
 
         results = self.collection.query(
             query_embeddings=[query_embedding],
