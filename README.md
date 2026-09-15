@@ -1,11 +1,11 @@
 # Bud
 
-A lightweight RAG (Retrieval-Augmented Generation) backend that ingests PDFs, embeds them into a vector database, and generates answers to questions using an LLM.
+A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds them into a vector database, and generates answers to questions using an LLM. Includes a Streamlit frontend for interacting with the system.
 
 ## Architecture
 
 ```
-                              INGESTION
+                               INGESTION
 ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌───────────┐     ┌──────────┐
 │  Upload   │────▶│  Parse   │────▶│  Chunk   │────▶│   Embed   │────▶│  Store   │
 │  (PDF)    │     │ (Markdown)│     │ (Splits) │     │ (Vectors) │     │ (ChromaDB)│
@@ -29,26 +29,31 @@ A lightweight RAG (Retrieval-Augmented Generation) backend that ingests PDFs, em
 ```
 Bud/
 ├── .env                        # API keys (gitignored)
+├── .env.example                # Example environment config
 ├── src/
 │   ├── bud/
 │   │   └── __init__.py         # Package entry point
-│   └── backend/
+│   ├── backend/
+│   │   ├── __init__.py
+│   │   ├── app.py              # FastAPI server & routes
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   ├── orchestrator.py # Centralizes upload, process, query logic
+│   │   │   ├── parser.py       # PDF → Markdown + metadata + chunks
+│   │   │   ├── chunker.py      # Text splitting into chunks
+│   │   │   ├── embeddings.py   # ChromaDB vector store + embeddings
+│   │   │   ├── retrieval.py    # Semantic search over embedded chunks
+│   │   │   ├── prompt_builder.py # Builds prompts from retrieved chunks
+│   │   │   └── generate.py     # LLM response generation via Groq
+│   │   └── Media/
+│   │       ├── Uploads/        # Stored PDFs
+│   │       └── Extracts/       # Generated .md, .json, and _chunks.json files
+│   └── frontend/
 │       ├── __init__.py
-│       ├── app.py              # FastAPI server & routes
-│       ├── Ingestion/
-│       │   ├── __init__.py
-│       │   ├── parser.py       # PDF → Markdown + metadata + chunks
-│       │   ├── chunker.py      # Text splitting into chunks
-│       │   └── embeddings.py   # ChromaDB vector store + embeddings
-│       ├── Retrieval/
-│       │   ├── __init__.py
-│       │   ├── retrieval.py    # Semantic search over embedded chunks
-│       │   └── prompt_builder.py  # Builds prompts from retrieved chunks
-│       ├── Generation/
-│       │   └── generate.py     # LLM response generation via Groq
-│       └── Media/
-│           ├── Uploads/        # Stored PDFs
-│           └── Extracts/       # Generated .md, .json, and _chunks.json files
+│       ├── ui.py               # Streamlit app entry point
+│       ├── sidebar.py          # File uploader
+│       ├── leftpanel.py        # PDF preview
+│       └── rightpanel.py       # Chat/query input
 ├── pyproject.toml              # Project config & dependencies
 ├── uv.lock                     # Dependency lock file
 └── README.md
@@ -58,7 +63,7 @@ Bud/
 
 ### Ingestion Pipeline
 
-1. **Upload** — Send a PDF file to `POST /upload`
+1. **Upload** — Send a PDF file to `POST /upload` (or via the frontend sidebar)
 2. **Parse** — The PDF is converted to Markdown page-by-page using `pymupdf4llm`
 3. **Chunk** — Text is split into overlapping chunks using `RecursiveCharacterTextSplitter`
 4. **Embed** — Chunks are embedded using `sentence-transformers` (nomic-embed-text-v1.5)
@@ -70,7 +75,7 @@ Bud/
 
 ### Query Pipeline
 
-1. **Query** — User sends a question to `POST /ask`
+1. **Query** — User sends a question to `POST /ask` (or via the frontend chat)
 2. **Embed Query** — The question is embedded using the same model
 3. **Search** — ChromaDB finds the most relevant chunks (top 5 by default)
 4. **Build Prompt** — Retrieved chunks are formatted into a context-aware prompt
@@ -127,7 +132,7 @@ Bud/
 |--------|-------|
 | 400    | File is not a PDF |
 | 400    | File is empty |
-| 413    | File exceeds 10 MB limit |
+| 413    | File exceeds 20 MB limit |
 | 500    | PDF parsing/embedding failed |
 
 ## Setup
@@ -146,21 +151,42 @@ uv sync
 
 ### Configure environment
 
-Create a `.env` file in the project root:
+Copy the example env file and add your API key:
 
 ```bash
+cp .env.example .env
+```
+
+Edit `.env` with your settings:
+
+```bash
+# LLM Model
+LLM="openai/gpt-oss-20b"
+
+# Embedding Model
+EMBEDDING_MODEL="nomic-ai/nomic-embed-text-v1.5"
+
+# Groq API key
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
-### Run the server
+### Run the backend
 
 ```bash
 uv run uvicorn src.backend.app:app --reload
 ```
 
-The server starts at `http://localhost:8000`.
+The backend starts at `http://localhost:8000`.
 
-### Upload a PDF
+### Run the frontend
+
+```bash
+uv run streamlit run src/frontend/ui.py
+```
+
+The frontend starts at `http://localhost:8501`.
+
+### Upload a PDF (API)
 
 ```bash
 curl -X POST http://localhost:8000/upload \
@@ -179,7 +205,7 @@ curl -X POST http://localhost:8000/upload \
 }
 ```
 
-### Ask a question
+### Ask a question (API)
 
 ```bash
 curl -X POST "http://localhost:8000/ask?request=What%20are%20the%20four%20laws%20of%20behavior%20change?"
@@ -193,18 +219,28 @@ curl -X POST "http://localhost:8000/ask?request=What%20are%20the%20four%20laws%2
 }
 ```
 
+## Frontend
+
+The Streamlit frontend provides a UI for interacting with Bud:
+
+| Component | File | Description |
+|-----------|------|-------------|
+| **Sidebar** | `sidebar.py` | Upload PDF files |
+| **Left Panel** | `leftpanel.py` | Preview uploaded PDFs |
+| **Right Panel** | `rightpanel.py` | Ask questions and view responses |
+
 ## Configuration
 
 ### Hardcoded Settings
 
 | Setting | Default | Location |
 |---------|---------|----------|
-| Upload directory | `src/backend/Media/Uploads/` | `app.py` |
+| Upload directory | `src/backend/Media/Uploads/` | `orchestrator.py` |
 | Extracts directory | `src/backend/Media/Extracts/` | `parser.py` |
-| Max file size | 10 MB | `app.py` |
-| Allowed extensions | `.pdf` | `app.py` |
-| Chunk size | 1000 | `chunker.py` |
-| Chunk overlap | 200 | `chunker.py` |
+| Max file size | 20 MB | `orchestrator.py` |
+| Allowed extensions | `.pdf` | `orchestrator.py` |
+| Chunk size | 2000 | `chunker.py` |
+| Chunk overlap | 400 | `chunker.py` |
 | Embedding model | `nomic-ai/nomic-embed-text-v1.5` | `embeddings.py` |
 | ChromaDB path | `src/backend/Chroma_DB/` | `embeddings.py` |
 | LLM model | `openai/gpt-oss-20b` | `generate.py` |
@@ -217,8 +253,12 @@ curl -X POST "http://localhost:8000/ask?request=What%20are%20the%20four%20laws%2
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GROQ_API_KEY` | Yes | API key for Groq LLM services |
+| `EMBEDDING_MODEL` | No | Embedding model name (default: `nomic-ai/nomic-embed-text-v1.5`) |
+| `LLM` | No | LLM model name (default: `openai/gpt-oss-20b`) |
 
 ## Dependencies
+
+### Backend
 
 | Package | Purpose |
 |---------|---------|
@@ -230,6 +270,12 @@ curl -X POST "http://localhost:8000/ask?request=What%20are%20the%20four%20laws%2
 | `chromadb` | Vector database for storing embeddings |
 | `groq` | LLM API for response generation |
 | `python-dotenv` | Loads environment variables from `.env` |
+
+### Frontend
+
+| Package | Purpose |
+|---------|---------|
+| `streamlit` | Web UI framework |
 
 ## Embedding Model
 
@@ -295,16 +341,23 @@ If you upload the same PDF twice, ChromaDB will error due to duplicate IDs. Dele
 | ChromaDB storage | ✅ Done |
 | Query/retrieval | ✅ Done |
 | RAG response generation | ✅ Done |
+| Streamlit frontend | ✅ Done |
 
 ## Development
 
-Run with auto-reload for development:
+### Backend
 
 ```bash
 uv run uvicorn src.backend.app:app --reload
 ```
 
 FastAPI provides interactive API docs at `http://localhost:8000/docs`.
+
+### Frontend
+
+```bash
+uv run streamlit run src/frontend/ui.py
+```
 
 ## License
 
