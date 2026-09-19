@@ -9,14 +9,14 @@ from frontend.rightpanel import render_right_pane
 st.set_page_config(page_title="Study Bud", layout="wide")
 
 # 1. Render Sidebar & retrieve uploaded file
-uploaded_file = render_sidebar()
+selected_filename = render_sidebar()
 
 # 2. Split main area into 2 equal columns
 col_left, col_right = st.columns([2, 1], gap="large")
 
 # 3. Render left pane (PDF) & right pane (Chat/Input)
 with col_left:
-    render_left_pane(uploaded_file)
+    render_left_pane(selected_filename)
 
 with col_right:
     render_right_pane()

@@ -214,6 +214,7 @@ dependencies = [
     { name = "huggingface-hub" },
     { name = "langchain-text-splitters" },
     { name = "pymupdf4llm" },
+    { name = "requests" },
     { name = "sentence-transformers" },
     { name = "streamlit" },
 ]
@@ -227,6 +228,7 @@ requires-dist = [
     { name = "huggingface-hub", specifier = ">=1.30.0" },
     { name = "langchain-text-splitters", specifier = ">=1.1.2" },
     { name = "pymupdf4llm", specifier = ">=1.28.2" },
+    { name = "requests", specifier = ">=2.34.2" },
     { name = "sentence-transformers", specifier = ">=6.0.1" },
     { name = "streamlit", specifier = ">=1.64.0" },
 ]
