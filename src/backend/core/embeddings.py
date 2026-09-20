@@ -33,11 +33,13 @@ class EmbeddingModel:
 
     def embed_documents(self, texts):
         """Adds a 'search_document' prefix to each text and returns their vector embeddings."""
+
         prefixed = [f"search_document: {t}" for t in texts]
         return self.model.encode(prefixed, show_progress_bar=True).tolist()
 
     def embed_query(self, query):
         """Adds a 'search_query' prefix to the query and returns its vector embedding."""
+        
         prefixed = f"search_query: {query}"
         return self.model.encode([prefixed]).tolist()[0]
     

@@ -4,6 +4,7 @@ retrive = Retrieval()
 
 def build_prompt(query: str, chunks: list[dict]) -> str:
     """Formats retrieved chunks into a context block and builds a grounded prompt for the LLM."""
+    
     context = "\n\n".join(
         f"[Source: {c['metadata']['page_number']}]\n{c['text']}"
         for c in chunks
