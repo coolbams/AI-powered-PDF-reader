@@ -1,14 +1,13 @@
 import base64
-import json
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 from .utils.ui_init import API_BASE_URL
 
 
 def render_left_pane(selected_filename):
     """Fetches the selected PDF from the backend and displays it in an embedded iframe.
     Shows a placeholder message if no document has been selected yet."""
+
     st.header("📃File Preview")
 
     if not selected_filename:
@@ -33,19 +32,10 @@ def render_left_pane(selected_filename):
         # If passed an UploadedFile object directly
         pdf_bytes = selected_filename.getvalue()
 
-
-    # Encode raw bytes to base64 and render iframe
+    # Encode raw bytes to base64 and render via st.iframe
     base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+    pdf_src = f"data:application/pdf;base64,{base64_pdf}"
 
-    pdf_display = f"""
-        <iframe 
-            src="data:application/pdf;base64,{base64_pdf}" 
-            width="100%" 
-            height="680px" 
-            type="application/pdf"
-            style="border: 1px solid #e6e6e6; border-radius: 8px;">
-        </iframe>
-    """
-    components.html(pdf_display, height=700, scrolling=False)
+    st.iframe(src=pdf_src, height=700)
 
     
