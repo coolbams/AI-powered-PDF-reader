@@ -24,11 +24,14 @@ app.add_middleware(
 
 @app.get("/")
 def home():
+    """Returns a simple health-check string to confirm the server is running."""
+
     return " Bud's Backend is 200 "
     
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
+    """Saves the uploaded PDF to disk, parses it, and stores its embeddings."""
 
     file_path = await orchestrator.save(file, UPLOAD_DIR)
     return orchestrator.process(file_path)
@@ -36,11 +39,16 @@ async def upload(file: UploadFile = File(...)):
 
 @app.post("/ask")
 async def query(request: str):
+    """Receives a question, retrieves relevant chunks, and returns an LLM answer.
+    """
+
     return orchestrator.query(request)
 
 
 @app.get("/list_files")
 async def get_uploaded_files():
+    """Returns a JSON list of all PDF filenames stored on the server."""
+
     try:
         file_list = get_file_list()
         return {"files": file_list}
@@ -50,7 +58,8 @@ async def get_uploaded_files():
 
 @app.get("/files/{filename}")
 def get_selcted_doc( filename: str ):
-
+    """Marks the named PDF as the active document and streams it back to the client."""
+    
     return set_document(filename)
 
 

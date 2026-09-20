@@ -2,6 +2,9 @@ import streamlit as st
 
 
 def render_right_pane():
+    """Renders the chat input area where the user can type questions about the selected PDF.
+    Displays the submitted question (full API call to be added)."""
+    
     st.header("💬Ask Your Study Bud ")
 
     # Push content down to fill space if needed

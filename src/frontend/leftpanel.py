@@ -7,6 +7,8 @@ from .utils.ui_init import API_BASE_URL
 
 
 def render_left_pane(selected_filename):
+    """Fetches the selected PDF from the backend and displays it in an embedded iframe.
+    Shows a placeholder message if no document has been selected yet."""
     st.header("📃File Preview")
 
     if not selected_filename:

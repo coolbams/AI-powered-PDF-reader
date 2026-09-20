@@ -9,6 +9,8 @@ from .embeddings import embed
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 def parse_pdf(file_path: str | Path) -> dict[str, Path]:
+    """Converts a PDF to Markdown, extracts per-page metadata, chunks the text,
+    embeds the chunks, and saves all outputs to the Extracts folder."""
     file_path = Path(file_path)
     extracts_dir = BASE_DIR / "Media" / "Extracts"
     extracts_dir.mkdir(parents=True, exist_ok=True)

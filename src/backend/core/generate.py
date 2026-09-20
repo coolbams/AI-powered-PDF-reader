@@ -9,6 +9,7 @@ api_key= os.getenv("GROQ_API_KEY")
 client = Groq(api_key=api_key)
 
 def generate_response(prompt: str) -> str:
+    """Sends the prompt to the Groq LLM and returns its generated text response."""
     response = client.chat.completions.create(
         model="openai/gpt-oss-20b",
         messages=[{"role": "user", "content": prompt}],

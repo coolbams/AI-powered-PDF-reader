@@ -7,6 +7,7 @@ chunk_overlap = 400
 
 
 def chunk_pages(pages: list[dict]) -> list[Document]:
+    """Splits each page's text into overlapping chunks and tags them with their page number."""
     splitter = RecursiveCharacterTextSplitter(
         chunk_size = chunk_size,
         chunk_overlap = chunk_overlap,

@@ -44,16 +44,20 @@ Bud/
 │   │   │   ├── embeddings.py   # ChromaDB vector store + embeddings
 │   │   │   ├── retrieval.py    # Semantic search over embedded chunks
 │   │   │   ├── prompt_builder.py # Builds prompts from retrieved chunks
-│   │   │   └── generate.py     # LLM response generation via Groq
+│   │   │   ├── generate.py     # LLM response generation via Groq
+│   │   │   ├── doc_selector.py # Manages active document selection & file responses
+│   │   │   └── get_uploaded_files.py # Lists uploaded files from disk
 │   │   └── Media/
 │   │       ├── Uploads/        # Stored PDFs
 │   │       └── Extracts/       # Generated .md, .json, and _chunks.json files
 │   └── frontend/
 │       ├── __init__.py
 │       ├── ui.py               # Streamlit app entry point
-│       ├── sidebar.py          # File uploader
-│       ├── leftpanel.py        # PDF preview
-│       └── rightpanel.py       # Chat/query input
+│       ├── sidebar.py          # PDF uploader & document selector
+│       ├── leftpanel.py        # PDF preview iframe
+│       ├── rightpanel.py       # Chat/query input
+│       └── utils/
+│           └── ui_init.py      # Frontend configuration & API URL
 ├── pyproject.toml              # Project config & dependencies
 ├── uv.lock                     # Dependency lock file
 └── README.md
@@ -120,11 +124,13 @@ Bud/
 
 ## API Reference
 
-| Method | Endpoint   | Description                                          |
-|--------|------------|------------------------------------------------------|
-| GET    | `/`        | Health check — returns `"Bud's Backend is 200"`      |
-| POST   | `/upload`  | Upload a PDF for parsing and embedding               |
-| POST   | `/ask`     | Ask a question about uploaded documents              |
+| Method | Endpoint            | Description                                           |
+|--------|---------------------|-------------------------------------------------------|
+| GET    | `/`                 | Health check — returns `"Bud's Backend is 200"`       |
+| POST   | `/upload`           | Upload a PDF for parsing and embedding                |
+| POST   | `/ask`              | Ask a question about uploaded documents               |
+| GET    | `/list_files`       | List all uploaded PDF files                           |
+| GET    | `/files/{filename}` | Retrieve a PDF file for preview & set active document |
 
 ### Error Responses
 
@@ -225,9 +231,10 @@ The Streamlit frontend provides a UI for interacting with Bud:
 
 | Component | File | Description |
 |-----------|------|-------------|
-| **Sidebar** | `sidebar.py` | Upload PDF files |
-| **Left Panel** | `leftpanel.py` | Preview uploaded PDFs |
+| **Sidebar** | `sidebar.py` | Upload PDF files and select active document |
+| **Left Panel** | `leftpanel.py` | Preview uploaded PDFs via embedded iframe |
 | **Right Panel** | `rightpanel.py` | Ask questions and view responses |
+| **Utilities** | `utils/ui_init.py` | Frontend configuration & API endpoint settings |
 
 ## Configuration
 
@@ -276,6 +283,7 @@ The Streamlit frontend provides a UI for interacting with Bud:
 | Package | Purpose |
 |---------|---------|
 | `streamlit` | Web UI framework |
+| `requests` | HTTP client for communicating with the FastAPI backend |
 
 ## Embedding Model
 

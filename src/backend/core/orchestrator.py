@@ -9,10 +9,12 @@ from .generate import generate_response
 retrieval = Retrieval()
 
 def validate(file: UploadFile):
+    """Raises a 400 HTTP error if the uploaded file is not a PDF."""
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 
 async def save(file: UploadFile, upload_dir: Path) -> Path:
+    """Validates, reads, and writes the uploaded file to disk; returns its saved path."""
     validate(file)
     content = await file.read()
     if len(content) == 0:
@@ -27,9 +29,11 @@ async def save(file: UploadFile, upload_dir: Path) -> Path:
     return file_path
 
 def process(file_path: Path) -> dict:
+    """Parses the PDF at file_path and triggers embedding; returns the output file paths."""
     return parse_pdf(file_path)
 
 def query(request: str) -> dict:
+    """Searches for relevant chunks and generates an LLM answer for the given question."""
     chunks = retrieval.search(request)
     prompt = build_prompt(request, chunks)
     response = generate_response(prompt)

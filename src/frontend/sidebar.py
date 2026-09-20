@@ -3,7 +3,9 @@ import requests
 from frontend.utils.ui_init import API_BASE_URL
 
 def fetch_file_list():
-    """Fetch file list from FastAPI backend."""
+    """Calls the backend API and returns a list of uploaded PDF filenames.
+    Shows a sidebar error and returns an empty list if the request fails."""
+
     try:
         response = requests.get(f"{API_BASE_URL}/list_files", timeout=5)
         if response.status_code == 200:
@@ -19,7 +21,9 @@ def fetch_file_list():
         return []
 
 def upload_file(file):
-    """Upload single file to FastAPI backend."""
+    """Posts the given file to the backend upload endpoint and returns True on 
+    success."""
+
     try:
         files = {"file": (file.name, file.getvalue(), file.type)}
         response = requests.post(f"{API_BASE_URL}/upload", files=files)
@@ -31,6 +35,10 @@ def upload_file(file):
 
 
 def render_sidebar():
+    """Renders the sidebar with a PDF uploader and document selector.
+    Returns the filename of the currently selected document, or None if none is selected."""
+
+    
     st.sidebar.title("Study Bud")
     st.sidebar.text("📥Upload PDF files...")
 

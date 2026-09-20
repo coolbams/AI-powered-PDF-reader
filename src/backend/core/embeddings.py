@@ -20,7 +20,10 @@ embedding_model = os.getenv("EMBEDDING_MODEL")
 
 
 class EmbeddingModel:
+    """Wraps a SentenceTransformer model to embed documents and queries with task prefixes."""
+
     def __init__(self, model_name=embedding_model, cache_folder=str(EMBEDDINGS_MODEL_PATH)):
+        """Loads the SentenceTransformer model from the local cache folder."""
         self.model = SentenceTransformer(
             model_name,
             local_files_only=True,
@@ -29,12 +32,12 @@ class EmbeddingModel:
         )
 
     def embed_documents(self, texts):
-        """Use this for chunks going into the vector store."""
+        """Adds a 'search_document' prefix to each text and returns their vector embeddings."""
         prefixed = [f"search_document: {t}" for t in texts]
         return self.model.encode(prefixed, show_progress_bar=True).tolist()
 
     def embed_query(self, query):
-        """Use this for the user's question at retrieval time."""
+        """Adds a 'search_query' prefix to the query and returns its vector embedding."""
         prefixed = f"search_query: {query}"
         return self.model.encode([prefixed]).tolist()[0]
     
@@ -43,7 +46,7 @@ class EmbeddingModel:
 
 
 def generate_ids(chunks, doc_name):
-
+    """Creates a unique string ID for each chunk using the document name, page, and chunk index."""
     ids=[]
 
     for i, chunk in enumerate(chunks):
@@ -54,7 +57,7 @@ def generate_ids(chunks, doc_name):
     return ids
 
 def embed(chunk_file_path: str, filename: str) -> None:
-
+    """Reads the chunks JSON file, generates embeddings, and stores them in ChromaDB."""
     embeder = EmbeddingModel()
 
     try:

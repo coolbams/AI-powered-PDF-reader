@@ -4,11 +4,15 @@ from .embeddings import EmbeddingModel, CHROMA_DB_PATH
 embed = EmbeddingModel()
 
 class Retrieval:
+    """Connects to ChromaDB and performs semantic search over embedded PDF chunks."""
+
     def __init__(self):
+        """Initialises the ChromaDB client and opens the shared embeddings collection."""
         self.client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
         self.collection = self.client.get_or_create_collection("my_embedded_pdfs")
 
     def search(self, query: str, top_k: int = 5) -> list[dict]:
+        """Embeds the query and returns the top-k most relevant chunks from the vector store."""
         query_embedding = embed.embed_query(query)
 
         results = self.collection.query(
