@@ -43,6 +43,7 @@ Bud/
 │   │   │   ├── chunker.py      # Text splitting into chunks
 │   │   │   ├── embeddings.py   # ChromaDB vector store + embeddings
 │   │   │   ├── retrieval.py    # Semantic search over embedded chunks
+│   │   │   ├── exceptions.py   # Custom exceptions (EmptyCollectionError, DocumentNotFoundError)
 │   │   │   ├── prompt_builder.py # Builds prompts from retrieved chunks
 │   │   │   ├── generate.py     # LLM response generation via Groq
 │   │   │   ├── doc_selector.py # Manages active document selection & file responses
@@ -136,10 +137,15 @@ Bud/
 
 | Status | Cause |
 |--------|-------|
-| 400    | File is not a PDF |
-| 400    | File is empty |
+| 400    | File is not a PDF, or file is empty |
+| 401    | Invalid `GROQ_API_KEY` |
+| 404    | No documents uploaded yet (empty collection) |
+| 404    | Requested `doc_name` not found in vector store |
+| 404    | No relevant content found for query |
 | 413    | File exceeds 20 MB limit |
-| 500    | PDF parsing/embedding failed |
+| 429    | Rate limited by Groq API |
+| 500    | PDF parsing/embedding or retrieval failed |
+| 502    | Could not connect to Groq API or LLM service unavailable |
 
 ## Setup
 
@@ -214,14 +220,29 @@ curl -X POST http://localhost:8000/upload \
 ### Ask a question (API)
 
 ```bash
-curl -X POST "http://localhost:8000/ask?request=What%20are%20the%20four%20laws%20of%20behavior%20change?"
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are the four laws of behavior change?",
+    "doc_name": "Atomic Habits",
+    "history": []
+  }'
 ```
+
+> **Note:** `doc_name` is optional. When provided, it must be the document filename **without** the `.pdf` extension (e.g. `"Atomic Habits"`). If omitted, search queries across all embedded documents.
 
 **Response:**
 ```json
 {
   "query": "What are the four laws of behavior change?",
-  "results": "The Four Laws of Behavior Change are: 1) Make it obvious, 2) Make it attractive, 3) Make it easy, 4) Make it satisfying."
+  "results": "The Four Laws of Behavior Change are: 1) Make it obvious, 2) Make it attractive, 3) Make it easy, 4) Make it satisfying.",
+  "sources": [
+    {
+      "text": "The Four Laws of Behavior Change are a simple set of rules...",
+      "page": 5,
+      "doc_name": "Atomic Habits"
+    }
+  ]
 }
 ```
 
@@ -276,6 +297,7 @@ The Streamlit frontend provides a UI for interacting with Bud:
 | `huggingface-hub` | Model hosting for sentence-transformers |
 | `chromadb` | Vector database for storing embeddings |
 | `groq` | LLM API for response generation |
+| `tiktoken` | Token counting for conversation history trimming |
 | `python-dotenv` | Loads environment variables from `.env` |
 
 ### Frontend
@@ -325,7 +347,7 @@ rm -rf src/backend/Chroma_DB/
 
 ### Duplicate upload errors
 
-If you upload the same PDF twice, ChromaDB will error due to duplicate IDs. Delete the existing collection or use a different filename.
+If you upload the same PDF twice, ChromaDB will throw an error due to duplicate chunk IDs (e.g., `ID ... already exists`). To resolve this, reset the vector database directory (`rm -rf src/backend/Chroma_DB/`) or rename the file before uploading.
 
 ## Limitations
 
