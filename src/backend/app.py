@@ -1,10 +1,17 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from pathlib import Path
 
 from backend.core import orchestrator
 from backend.core.get_uploaded_files import get_file_list
 from backend.core.doc_selector import set_document
+
+
+class AskRequest(BaseModel):
+    query: str
+    doc_name: str | None = None
+    history: list[dict] | None = None
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -32,17 +39,15 @@ def home():
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
     """Saves the uploaded PDF to disk, parses it, and stores its embeddings."""
-
     file_path = await orchestrator.save(file, UPLOAD_DIR)
     return orchestrator.process(file_path)
 
 
 @app.post("/ask")
-async def query(request: str):
-    """Receives a question, retrieves relevant chunks, and returns an LLM answer.
-    """
+async def query(body: AskRequest):
+    """Receives a question, retrieves relevant chunks, and returns an LLM answer."""
 
-    return orchestrator.query(request)
+    return orchestrator.query(body.query, body.doc_name, body.history)
 
 
 @app.get("/list_files")
@@ -59,7 +64,7 @@ async def get_uploaded_files():
 @app.get("/files/{filename}")
 def get_selcted_doc( filename: str ):
     """Marks the named PDF as the active document and streams it back to the client."""
-    
+
     return set_document(filename)
 
 

@@ -37,10 +37,9 @@ def upload_file(file):
 def render_sidebar():
     """Renders the sidebar with a PDF uploader and document selector.
     Returns the filename of the currently selected document, or None if none is selected."""
-
     
     st.sidebar.title("Study Bud")
-    st.sidebar.text("📥Upload PDF files...")
+    st.sidebar.text("📥 Upload PDF files...")
 
     uploaded_file = st.sidebar.file_uploader("Choose a PDF file", type=["pdf"])
 
@@ -69,6 +68,7 @@ def render_sidebar():
             options=file_list,
             key="active_pdf_selection",
         )
+        st.session_state["active_doc"] = selected_document
         st.sidebar.caption(f"🎯 Selected: **{selected_document}**")
     else:
         st.sidebar.info("🚫 No documents found.")

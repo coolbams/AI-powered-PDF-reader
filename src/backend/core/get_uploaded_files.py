@@ -9,7 +9,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 def get_file_list():
     """Scans the Uploads directory and returns a list of all stored PDF filenames."""
     
-    file_names = [f.name for f in UPLOAD_DIR.iterdir() if f.is_file()]
+    file_names = [f.stem for f in UPLOAD_DIR.iterdir() if f.is_file() and f.suffix == ".pdf"]
 
     return file_names
 

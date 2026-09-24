@@ -11,7 +11,7 @@ session_state = {"active_doc": None}
 def set_document( selected_file ):
     """Validates the requested PDF exists, records it as the active document, and streams it back."""
     
-    file_path = UPLOAD_DIR / selected_file
+    file_path = UPLOAD_DIR / f"{selected_file}.pdf"
 
     if not file_path.is_file():
         raise HTTPException(

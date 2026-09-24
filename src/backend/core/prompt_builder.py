@@ -1,6 +1,4 @@
-from .retrieval import Retrieval
 
-retrive = Retrieval()
 
 def build_prompt(query: str, chunks: list[dict]) -> str:
     """Formats retrieved chunks into a context block and builds a grounded prompt for the LLM."""

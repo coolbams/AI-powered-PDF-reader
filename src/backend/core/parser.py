@@ -18,7 +18,7 @@ def parse_pdf(file_path: str | Path) -> dict[str, Path]:
         
     pages = pymupdf4llm.to_markdown(str(file_path), page_chunks=True)
 
-    chunks_results = chunk_pages(pages)
+    chunks_results = chunk_pages(pages, file_path.stem)
     
     markdown_path = extracts_dir / f"{file_path.stem}.md"
     markdown_path.write_text("\n\n".join(p["text"] for p in pages), encoding="utf-8")
