@@ -1,6 +1,6 @@
 # Bud
 
-A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds them into a vector database, and generates answers to questions using an LLM. Includes a modern React (Vite + Tailwind CSS + react-pdf) frontend for interacting with the system.
+A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds them into a vector database, and generates answers to questions using an LLM. Includes a Streamlit frontend for interacting with the system.
 
 ## Architecture
 
@@ -30,21 +30,6 @@ A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds
 Bud/
 ├── .env                        # API keys (gitignored)
 ├── .env.example                # Example environment config
-├── buds-frontend/              # React frontend (Vite + Tailwind CSS v4)
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── index.html
-│   └── src/
-│       ├── App.jsx             # Root layout & page container
-│       ├── main.jsx            # React 19 entry point
-│       ├── index.css           # Tailwind v4 import & design tokens
-│       └── components/
-│           ├── Header.jsx        # Top navbar & branding
-│           ├── ThreeBodiedPane.jsx # 3-panel dashboard layout & state
-│           ├── UploadSidebar.jsx # PDF uploader & document list
-│           ├── PDFFileReader.jsx # React-PDF viewer with pagination & zoom
-│           ├── ChatbotPane.jsx   # AI query input & chat interface
-│           └── ui/               # Base UI & Shadcn components (button, toggle, etc.)
 ├── src/
 │   ├── bud/
 │   │   └── __init__.py         # Package entry point
@@ -66,8 +51,16 @@ Bud/
 │   │   └── Media/
 │   │       ├── Uploads/        # Stored PDFs
 │   │       └── Extracts/       # Generated .md, .json, and _chunks.json files
-├── pyproject.toml              # Python project config & dependencies
-├── uv.lock                     # Python dependency lock file
+│   └── frontend/
+│       ├── __init__.py
+│       ├── ui.py               # Streamlit app entry point
+│       ├── sidebar.py          # PDF uploader & document selector
+│       ├── leftpanel.py        # PDF preview iframe
+│       ├── rightpanel.py       # Chat/query input
+│       └── utils/
+│           └── ui_init.py      # Frontend configuration & API URL
+├── pyproject.toml              # Project config & dependencies
+├── uv.lock                     # Dependency lock file
 └── README.md
 ```
 
@@ -160,20 +153,12 @@ Bud/
 
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/) package manager
-- Node.js 18+ and npm
 - A [Groq API key](https://console.groq.com/)
 
 ### Install dependencies
 
-**Backend:**
 ```bash
 uv sync
-```
-
-**Frontend:**
-```bash
-cd buds-frontend
-npm install
 ```
 
 ### Configure environment
@@ -208,11 +193,10 @@ The backend starts at `http://localhost:8000`.
 ### Run the frontend
 
 ```bash
-cd buds-frontend
-npm run dev
+uv run streamlit run src/frontend/ui.py
 ```
 
-The frontend starts at `http://localhost:5173`.
+The frontend starts at `http://localhost:8501`.
 
 ### Upload a PDF (API)
 
@@ -264,15 +248,14 @@ curl -X POST http://localhost:8000/ask \
 
 ## Frontend
 
-The modern React frontend (`buds-frontend/`) provides an interactive 3-panel dashboard for interacting with Bud:
+The Streamlit frontend provides a UI for interacting with Bud:
 
 | Component | File | Description |
 |-----------|------|-------------|
-| **Header** | `Header.jsx` | Top navigation bar with branding & server status |
-| **Dashboard Layout** | `ThreeBodiedPane.jsx` | 3-panel flex layout coordinating shared state across panes |
-| **Sources Sidebar** | `UploadSidebar.jsx` | Dynamic file list fetched from backend & PDF file uploader |
-| **PDF Viewer** | `PDFFileReader.jsx` | React-PDF page-by-page reader with pagination, zoom, and PDF/Markdown toggle |
-| **Chatbot Pane** | `ChatbotPane.jsx` | Conversation interface for asking questions grounded in uploaded PDFs |
+| **Sidebar** | `sidebar.py` | Upload PDF files and select active document |
+| **Left Panel** | `leftpanel.py` | Preview uploaded PDFs via embedded iframe |
+| **Right Panel** | `rightpanel.py` | Ask questions and view responses |
+| **Utilities** | `utils/ui_init.py` | Frontend configuration & API endpoint settings |
 
 ## Configuration
 
@@ -321,12 +304,8 @@ The modern React frontend (`buds-frontend/`) provides an interactive 3-panel das
 
 | Package | Purpose |
 |---------|---------|
-| `react` & `react-dom` | React 19 UI component framework |
-| `react-pdf` | Client-side PDF rendering using PDF.js worker |
-| `tailwindcss` (v4) | Utility-first styling framework |
-| `@base-ui/react` | Accessible, unstyled UI primitives (ToggleGroup, Button) |
-| `lucide-react` | Clean UI icons |
-| `vite` | Fast frontend build tool & development server |
+| `streamlit` | Web UI framework |
+| `requests` | HTTP client for communicating with the FastAPI backend |
 
 ## Embedding Model
 
@@ -391,8 +370,8 @@ If you upload the same PDF twice, ChromaDB will throw an error due to duplicate 
 | Embedding generation | ✅ Done |
 | ChromaDB storage | ✅ Done |
 | Query/retrieval | ✅ Done |
-| Streamlit frontend | ⚠️ Legacy / Deprecated |
-| React frontend (`buds-frontend`) | ✅ Done |
+| RAG response generation | ✅ Done |
+| Streamlit frontend | ✅ Done |
 
 ## Development
 
@@ -407,8 +386,7 @@ FastAPI provides interactive API docs at `http://localhost:8000/docs`.
 ### Frontend
 
 ```bash
-cd buds-frontend
-npm run dev
+uv run streamlit run src/frontend/ui.py
 ```
 
 ## License
