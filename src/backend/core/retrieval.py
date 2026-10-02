@@ -12,7 +12,7 @@ class Retrieval:
         self.client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
         self.collection = self.client.get_or_create_collection("my_embedded_pdfs")
 
-    def search(self, query: str, top_k: int = 5, doc_name: str | None = None) -> list[dict]:
+    def search(self, query: str, top_k: int = 20, doc_name: str | None = None) -> list[dict]:
         """Embeds the query and returns the top-k most relevant chunks from the vector store.
         If doc_name is provided, filters results to that document only."""
 

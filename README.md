@@ -11,17 +11,23 @@ A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds
 │  (PDF)    │     │ (Markdown)│     │ (Splits) │     │ (Vectors) │     │ (ChromaDB)│
 └──────────┘     └──────────┘     └──────────┘     └───────────┘     └──────────┘
                                                                    │
-                              RETRIEVAL & GENERATION               │
+                               RETRIEVAL & GENERATION               │
 ┌──────────┐     ┌──────────────┐     ┌───────────┐               │
 │  Query   │────▶│   Retrieve   │◀────│  Search   │◀──────────────┘
-│ (user)   │     │   (Chunks)   │     │ (Embed)   │
+│ (user)   │     │ (20 Chunks)  │     │ (Embed)   │
 └──────────┘     └──────┬───────┘     └───────────┘
                         │
                         ▼
-               ┌──────────────┐     ┌───────────┐
-               │ Build Prompt │────▶│ Generate  │────▶ Response (LLM)
-               │              │     │  (Groq)   │
-               └──────────────┘     └───────────┘
+               ┌──────────────────┐
+               │    Re-Ranker     │ (Cross-Encoder)
+               │  (Top 3 Chunks)  │
+               └────────┬─────────┘
+                        │
+                        ▼
+               ┌──────────────────┐     ┌───────────┐
+               │   Build Prompt   │────▶│ Generate  │────▶ Response (LLM)
+               │                  │     │  (Groq)   │
+               └──────────────────┘     └───────────┘
 ```
 
 ## Project Structure
@@ -58,6 +64,7 @@ Bud/
 │   │   │   ├── chunker.py      # Text splitting into chunks
 │   │   │   ├── embeddings.py   # ChromaDB vector store + embeddings
 │   │   │   ├── retrieval.py    # Semantic search over embedded chunks
+│   │   │   ├── reranker.py     # Cross-encoder re-ranking for retrieved chunks
 │   │   │   ├── exceptions.py   # Custom exceptions (EmptyCollectionError, DocumentNotFoundError)
 │   │   │   ├── prompt_builder.py # Builds prompts from retrieved chunks
 │   │   │   ├── generate.py     # LLM response generation via Groq
@@ -88,11 +95,12 @@ Bud/
 ### Query Pipeline
 
 1. **Query** — User sends a question to `POST /ask` (or via the frontend chat)
-2. **Embed Query** — The question is embedded using the same model
-3. **Search** — ChromaDB finds the most relevant chunks (top 5 by default)
-4. **Build Prompt** — Retrieved chunks are formatted into a context-aware prompt
-5. **Generate** — The prompt is sent to Groq's LLM for response generation
-6. **Respond** — Returns the generated answer
+2. **Embed Query** — The question is embedded using `nomic-embed-text-v1.5`
+3. **Dense Search** — ChromaDB retrieves the top 20 candidate chunks via vector similarity
+4. **Re-Rank** — A cross-encoder model (`cross-encoder/ms-marco-MiniLM-L-6-v2`) re-scores each candidate against the query jointly and filters down to the top 3 most relevant chunks
+5. **Build Prompt** — Re-ranked chunks are formatted into a context-aware prompt
+6. **Generate** — The prompt is sent to Groq's LLM (`openai/gpt-oss-20b`) for response generation
+7. **Respond** — Returns the generated answer with source page citations
 
 ## Output Formats
 
@@ -288,10 +296,12 @@ The modern React frontend (`buds-frontend/`) provides an interactive 3-panel das
 | Chunk overlap | 400 | `chunker.py` |
 | Embedding model | `nomic-ai/nomic-embed-text-v1.5` | `embeddings.py` |
 | ChromaDB path | `src/backend/Chroma_DB/` | `embeddings.py` |
+| Re-ranker model | `cross-encoder/ms-marco-MiniLM-L-6-v2` | `reranker.py` |
+| Dense retrieval candidates | 20 (`top_k`) | `retrieval.py` |
+| Re-ranked final chunks | 3 (`top_k`) | `orchestrator.py` |
 | LLM model | `openai/gpt-oss-20b` | `generate.py` |
 | LLM temperature | 0.3 | `generate.py` |
 | LLM max tokens | 4000 | `generate.py` |
-| Search results | 5 (top_k) | `retrieval.py` |
 
 ### Environment Variables
 
@@ -338,6 +348,17 @@ Bud uses [nomic-embed-text-v1.5](https://huggingface.co/nomic-ai/nomic-embed-tex
 - **Prefixes:** Uses `search_document:` for indexing and `search_query:` for retrieval
 
 The model is downloaded and cached locally on first run in `src/backend/Embedding_Model/`.
+
+## Re-Ranking Model
+
+Bud uses [cross-encoder/ms-marco-MiniLM-L-6-v2](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) for cross-encoder passage re-ranking:
+
+- **Architecture:** BERT-based Cross-Encoder
+- **Training Dataset:** MS MARCO Passage Ranking
+- **Model Size:** ~90MB (fast inference on CPU)
+- **Role:** Evaluates the `(query, chunk)` pair jointly to compute an exact relevance score, refining the top 20 ChromaDB vector candidates down to the top 3 most relevant context chunks for the LLM.
+
+The model is automatically downloaded and cached by HuggingFace on first run.
 
 ## Troubleshooting
 
@@ -391,6 +412,7 @@ If you upload the same PDF twice, ChromaDB will throw an error due to duplicate 
 | Embedding generation | ✅ Done |
 | ChromaDB storage | ✅ Done |
 | Query/retrieval | ✅ Done |
+| Cross-encoder re-ranking | ✅ Done |
 | Streamlit frontend | ⚠️ Legacy / Deprecated |
 | React frontend (`buds-frontend`) | ✅ Done |
 

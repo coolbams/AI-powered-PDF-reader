@@ -8,6 +8,7 @@ from .retrieval import Retrieval
 from .exceptions import EmptyCollectionError, DocumentNotFoundError
 from .prompt_builder import build_prompt
 from .generate import generate_response
+from .reranker import rerank
 
 logger = logging.getLogger(__name__)
 retrieval = Retrieval()
@@ -43,7 +44,8 @@ def query(request: str, doc_name: str | None = None, history: list[dict] | None 
     """Searches for relevant chunks and generates an LLM answer for the given question."""
 
     try:
-        chunks = retrieval.search(request, doc_name=doc_name)
+        candidates = retrieval.search(request, doc_name=doc_name)
+        chunks = rerank(request, candidates, top_k=3)
     except EmptyCollectionError:
         raise HTTPException(
             status_code=404,
