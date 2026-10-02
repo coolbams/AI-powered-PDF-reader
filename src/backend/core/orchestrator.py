@@ -73,9 +73,9 @@ def query(request: str, doc_name: str | None = None, history: list[dict] | None 
 
     sources = [
         {
-            "text": c["text"][:200] + "..." if len(c["text"]) > 200 else c["text"],
+            # "text": c["text"][:200] + "..." if len(c["text"]) > 200 else c["text"],
             "page": c["metadata"]["page_number"],
-            "doc_name": c["metadata"].get("doc_name"),
+            # "doc_name": c["metadata"].get("doc_name"),
         }
         for c in chunks
     ]
