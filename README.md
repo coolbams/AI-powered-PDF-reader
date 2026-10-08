@@ -1,6 +1,6 @@
 # Bud
 
-A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds them into a vector database, and generates answers to questions using an LLM. Includes a Streamlit frontend for interacting with the system.
+A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds them into a vector database, and generates answers to questions using an LLM. Includes a modern React (Vite + Tailwind CSS + react-pdf) frontend for interacting with the system.
 
 ## Architecture
 
@@ -11,17 +11,23 @@ A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds
 │  (PDF)    │     │ (Markdown)│     │ (Splits) │     │ (Vectors) │     │ (ChromaDB)│
 └──────────┘     └──────────┘     └──────────┘     └───────────┘     └──────────┘
                                                                    │
-                              RETRIEVAL & GENERATION               │
+                               RETRIEVAL & GENERATION               │
 ┌──────────┐     ┌──────────────┐     ┌───────────┐               │
 │  Query   │────▶│   Retrieve   │◀────│  Search   │◀──────────────┘
-│ (user)   │     │   (Chunks)   │     │ (Embed)   │
+│ (user)   │     │ (20 Chunks)  │     │ (Embed)   │
 └──────────┘     └──────┬───────┘     └───────────┘
                         │
                         ▼
-               ┌──────────────┐     ┌───────────┐
-               │ Build Prompt │────▶│ Generate  │────▶ Response (LLM)
-               │              │     │  (Groq)   │
-               └──────────────┘     └───────────┘
+               ┌──────────────────┐
+               │    Re-Ranker     │ (Cross-Encoder)
+               │  (Top 3 Chunks)  │
+               └────────┬─────────┘
+                        │
+                        ▼
+               ┌──────────────────┐     ┌───────────┐
+               │   Build Prompt   │────▶│ Generate  │────▶ Response (LLM)
+               │                  │     │  (Groq)   │
+               └──────────────────┘     └───────────┘
 ```
 
 ## Project Structure
@@ -30,6 +36,21 @@ A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds
 Bud/
 ├── .env                        # API keys (gitignored)
 ├── .env.example                # Example environment config
+├── buds-frontend/              # React frontend (Vite + Tailwind CSS v4)
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── index.html
+│   └── src/
+│       ├── App.jsx             # Root layout & page container
+│       ├── main.jsx            # React 19 entry point
+│       ├── index.css           # Tailwind v4 import & design tokens
+│       └── components/
+│           ├── Header.jsx        # Top navbar & branding
+│           ├── ThreeBodiedPane.jsx # 3-panel dashboard layout & state
+│           ├── UploadSidebar.jsx # PDF uploader & document list
+│           ├── PDFFileReader.jsx # React-PDF viewer with pagination & zoom
+│           ├── ChatbotPane.jsx   # AI query input & chat interface
+│           └── ui/               # Base UI & Shadcn components (button, toggle, etc.)
 ├── src/
 │   ├── bud/
 │   │   └── __init__.py         # Package entry point
@@ -43,19 +64,17 @@ Bud/
 │   │   │   ├── chunker.py      # Text splitting into chunks
 │   │   │   ├── embeddings.py   # ChromaDB vector store + embeddings
 │   │   │   ├── retrieval.py    # Semantic search over embedded chunks
+│   │   │   ├── reranker.py     # Cross-encoder re-ranking for retrieved chunks
+│   │   │   ├── exceptions.py   # Custom exceptions (EmptyCollectionError, DocumentNotFoundError)
 │   │   │   ├── prompt_builder.py # Builds prompts from retrieved chunks
-│   │   │   └── generate.py     # LLM response generation via Groq
+│   │   │   ├── generate.py     # LLM response generation via Groq
+│   │   │   ├── doc_selector.py # Manages active document selection & file responses
+│   │   │   └── get_uploaded_files.py # Lists uploaded files from disk
 │   │   └── Media/
 │   │       ├── Uploads/        # Stored PDFs
 │   │       └── Extracts/       # Generated .md, .json, and _chunks.json files
-│   └── frontend/
-│       ├── __init__.py
-│       ├── ui.py               # Streamlit app entry point
-│       ├── sidebar.py          # File uploader
-│       ├── leftpanel.py        # PDF preview
-│       └── rightpanel.py       # Chat/query input
-├── pyproject.toml              # Project config & dependencies
-├── uv.lock                     # Dependency lock file
+├── pyproject.toml              # Python project config & dependencies
+├── uv.lock                     # Python dependency lock file
 └── README.md
 ```
 
@@ -76,11 +95,12 @@ Bud/
 ### Query Pipeline
 
 1. **Query** — User sends a question to `POST /ask` (or via the frontend chat)
-2. **Embed Query** — The question is embedded using the same model
-3. **Search** — ChromaDB finds the most relevant chunks (top 5 by default)
-4. **Build Prompt** — Retrieved chunks are formatted into a context-aware prompt
-5. **Generate** — The prompt is sent to Groq's LLM for response generation
-6. **Respond** — Returns the generated answer
+2. **Embed Query** — The question is embedded using `nomic-embed-text-v1.5`
+3. **Dense Search** — ChromaDB retrieves the top 20 candidate chunks via vector similarity
+4. **Re-Rank** — A cross-encoder model (`cross-encoder/ms-marco-MiniLM-L-6-v2`) re-scores each candidate against the query jointly and filters down to the top 3 most relevant chunks
+5. **Build Prompt** — Re-ranked chunks are formatted into a context-aware prompt
+6. **Generate** — The prompt is sent to Groq's LLM (`openai/gpt-oss-20b`) for response generation
+7. **Respond** — Returns the generated answer with source page citations
 
 ## Output Formats
 
@@ -120,20 +140,27 @@ Bud/
 
 ## API Reference
 
-| Method | Endpoint   | Description                                          |
-|--------|------------|------------------------------------------------------|
-| GET    | `/`        | Health check — returns `"Bud's Backend is 200"`      |
-| POST   | `/upload`  | Upload a PDF for parsing and embedding               |
-| POST   | `/ask`     | Ask a question about uploaded documents              |
+| Method | Endpoint            | Description                                           |
+|--------|---------------------|-------------------------------------------------------|
+| GET    | `/`                 | Health check — returns `"Bud's Backend is 200"`       |
+| POST   | `/upload`           | Upload a PDF for parsing and embedding                |
+| POST   | `/ask`              | Ask a question about uploaded documents               |
+| GET    | `/list_files`       | List all uploaded PDF files                           |
+| GET    | `/files/{filename}` | Retrieve a PDF file for preview & set active document |
 
 ### Error Responses
 
 | Status | Cause |
 |--------|-------|
-| 400    | File is not a PDF |
-| 400    | File is empty |
+| 400    | File is not a PDF, or file is empty |
+| 401    | Invalid `GROQ_API_KEY` |
+| 404    | No documents uploaded yet (empty collection) |
+| 404    | Requested `doc_name` not found in vector store |
+| 404    | No relevant content found for query |
 | 413    | File exceeds 20 MB limit |
-| 500    | PDF parsing/embedding failed |
+| 429    | Rate limited by Groq API |
+| 500    | PDF parsing/embedding or retrieval failed |
+| 502    | Could not connect to Groq API or LLM service unavailable |
 
 ## Setup
 
@@ -141,12 +168,20 @@ Bud/
 
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/) package manager
+- Node.js 18+ and npm
 - A [Groq API key](https://console.groq.com/)
 
 ### Install dependencies
 
+**Backend:**
 ```bash
 uv sync
+```
+
+**Frontend:**
+```bash
+cd buds-frontend
+npm install
 ```
 
 ### Configure environment
@@ -181,10 +216,11 @@ The backend starts at `http://localhost:8000`.
 ### Run the frontend
 
 ```bash
-uv run streamlit run src/frontend/ui.py
+cd buds-frontend
+npm run dev
 ```
 
-The frontend starts at `http://localhost:8501`.
+The frontend starts at `http://localhost:5173`.
 
 ### Upload a PDF (API)
 
@@ -208,26 +244,72 @@ curl -X POST http://localhost:8000/upload \
 ### Ask a question (API)
 
 ```bash
-curl -X POST "http://localhost:8000/ask?request=What%20are%20the%20four%20laws%20of%20behavior%20change?"
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are the four laws of behavior change?",
+    "doc_name": "Atomic Habits",
+    "history": []
+  }'
 ```
+
+> **Note:** `doc_name` is optional. When provided, it must be the document filename **without** the `.pdf` extension (e.g. `"Atomic Habits"`). If omitted, search queries across all embedded documents.
 
 **Response:**
 ```json
 {
   "query": "What are the four laws of behavior change?",
-  "results": "The Four Laws of Behavior Change are: 1) Make it obvious, 2) Make it attractive, 3) Make it easy, 4) Make it satisfying."
+  "results": "The Four Laws of Behavior Change are: 1) Make it obvious, 2) Make it attractive, 3) Make it easy, 4) Make it satisfying.",
+  "sources": [
+    {
+      "text": "The Four Laws of Behavior Change are a simple set of rules...",
+      "page": 5,
+      "doc_name": "Atomic Habits"
+    }
+  ]
 }
+```
+
+### Ask a question with real-time SSE streaming (API)
+
+```bash
+curl -N -X POST http://localhost:8000/ask/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are the four laws of behavior change?",
+    "doc_name": "Atomic Habits",
+    "history": []
+  }'
+```
+
+> **Note:** The `-N` flag disables output buffering in `curl`, printing tokens in real time as they are generated by the LLM.
+
+**SSE Stream Output:**
+```
+data: {"type": "sources", "sources": [{"page": 5}]}
+
+data: {"type": "token", "token": "The"}
+
+data: {"type": "token", "token": " Four"}
+
+data: {"type": "token", "token": " Laws"}
+
+...
+
+data: {"type": "done"}
 ```
 
 ## Frontend
 
-The Streamlit frontend provides a UI for interacting with Bud:
+The modern React frontend (`buds-frontend/`) provides an interactive 3-panel dashboard for interacting with Bud:
 
 | Component | File | Description |
 |-----------|------|-------------|
-| **Sidebar** | `sidebar.py` | Upload PDF files |
-| **Left Panel** | `leftpanel.py` | Preview uploaded PDFs |
-| **Right Panel** | `rightpanel.py` | Ask questions and view responses |
+| **Header** | `Header.jsx` | Top navigation bar with branding & server status |
+| **Dashboard Layout** | `ThreeBodiedPane.jsx` | 3-panel flex layout coordinating shared state across panes |
+| **Sources Sidebar** | `UploadSidebar.jsx` | Dynamic file list fetched from backend & PDF file uploader |
+| **PDF Viewer** | `PDFFileReader.jsx` | React-PDF page-by-page reader with pagination, zoom, and PDF/Markdown toggle |
+| **Chatbot Pane** | `ChatbotPane.jsx` | Conversation interface for asking questions grounded in uploaded PDFs |
 
 ## Configuration
 
@@ -243,10 +325,12 @@ The Streamlit frontend provides a UI for interacting with Bud:
 | Chunk overlap | 400 | `chunker.py` |
 | Embedding model | `nomic-ai/nomic-embed-text-v1.5` | `embeddings.py` |
 | ChromaDB path | `src/backend/Chroma_DB/` | `embeddings.py` |
+| Re-ranker model | `cross-encoder/ms-marco-MiniLM-L-6-v2` | `reranker.py` |
+| Dense retrieval candidates | 20 (`top_k`) | `retrieval.py` |
+| Re-ranked final chunks | 3 (`top_k`) | `orchestrator.py` |
 | LLM model | `openai/gpt-oss-20b` | `generate.py` |
 | LLM temperature | 0.3 | `generate.py` |
 | LLM max tokens | 4000 | `generate.py` |
-| Search results | 5 (top_k) | `retrieval.py` |
 
 ### Environment Variables
 
@@ -269,13 +353,19 @@ The Streamlit frontend provides a UI for interacting with Bud:
 | `huggingface-hub` | Model hosting for sentence-transformers |
 | `chromadb` | Vector database for storing embeddings |
 | `groq` | LLM API for response generation |
+| `tiktoken` | Token counting for conversation history trimming |
 | `python-dotenv` | Loads environment variables from `.env` |
 
 ### Frontend
 
 | Package | Purpose |
 |---------|---------|
-| `streamlit` | Web UI framework |
+| `react` & `react-dom` | React 19 UI component framework |
+| `react-pdf` | Client-side PDF rendering using PDF.js worker |
+| `tailwindcss` (v4) | Utility-first styling framework |
+| `@base-ui/react` | Accessible, unstyled UI primitives (ToggleGroup, Button) |
+| `lucide-react` | Clean UI icons |
+| `vite` | Fast frontend build tool & development server |
 
 ## Embedding Model
 
@@ -287,6 +377,17 @@ Bud uses [nomic-embed-text-v1.5](https://huggingface.co/nomic-ai/nomic-embed-tex
 - **Prefixes:** Uses `search_document:` for indexing and `search_query:` for retrieval
 
 The model is downloaded and cached locally on first run in `src/backend/Embedding_Model/`.
+
+## Re-Ranking Model
+
+Bud uses [cross-encoder/ms-marco-MiniLM-L-6-v2](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) for cross-encoder passage re-ranking:
+
+- **Architecture:** BERT-based Cross-Encoder
+- **Training Dataset:** MS MARCO Passage Ranking
+- **Model Size:** ~90MB (fast inference on CPU)
+- **Role:** Evaluates the `(query, chunk)` pair jointly to compute an exact relevance score, refining the top 20 ChromaDB vector candidates down to the top 3 most relevant context chunks for the LLM.
+
+The model is automatically downloaded and cached by HuggingFace on first run.
 
 ## Troubleshooting
 
@@ -317,7 +418,7 @@ rm -rf src/backend/Chroma_DB/
 
 ### Duplicate upload errors
 
-If you upload the same PDF twice, ChromaDB will error due to duplicate IDs. Delete the existing collection or use a different filename.
+If you upload the same PDF twice, ChromaDB will throw an error due to duplicate chunk IDs (e.g., `ID ... already exists`). To resolve this, reset the vector database directory (`rm -rf src/backend/Chroma_DB/`) or rename the file before uploading.
 
 ## Limitations
 
@@ -326,7 +427,6 @@ If you upload the same PDF twice, ChromaDB will error due to duplicate IDs. Dele
 | **No duplicate uploads** | Uploading the same PDF twice causes a ChromaDB `UniqueConstraintError`. There is no upsert or deduplication logic. |
 | **PDF only** | Only `.pdf` files are accepted. No support for DOCX, TXT, or other formats. |
 | **Single collection** | All documents are stored in one ChromaDB collection (`my_embedded_pdfs`). No per-document or per-user isolation. |
-| **No streaming** | The `/ask` endpoint returns the full response at once. No streaming support for long answers. |
 | **Synchronous embedding** | The embedding model runs synchronously and blocks the event loop during uploads. |
 
 ## Project Status
@@ -340,8 +440,10 @@ If you upload the same PDF twice, ChromaDB will error due to duplicate IDs. Dele
 | Embedding generation | ✅ Done |
 | ChromaDB storage | ✅ Done |
 | Query/retrieval | ✅ Done |
-| RAG response generation | ✅ Done |
-| Streamlit frontend | ✅ Done |
+| Cross-encoder re-ranking | ✅ Done |
+| SSE response streaming (`/ask/stream`) | ✅ Done |
+| Streamlit frontend | ⚠️ Legacy / Deprecated |
+| React frontend (`buds-frontend`) | ✅ Done |
 
 ## Development
 
@@ -356,7 +458,8 @@ FastAPI provides interactive API docs at `http://localhost:8000/docs`.
 ### Frontend
 
 ```bash
-uv run streamlit run src/frontend/ui.py
+cd buds-frontend
+npm run dev
 ```
 
 ## License

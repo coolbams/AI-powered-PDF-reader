@@ -9,13 +9,16 @@ from .embeddings import embed
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 def parse_pdf(file_path: str | Path) -> dict[str, Path]:
+    """Converts a PDF to Markdown, extracts per-page metadata, chunks the text,
+    embeds the chunks, and saves all outputs to the Extracts folder."""
+    
     file_path = Path(file_path)
     extracts_dir = BASE_DIR / "Media" / "Extracts"
     extracts_dir.mkdir(parents=True, exist_ok=True)
         
     pages = pymupdf4llm.to_markdown(str(file_path), page_chunks=True)
 
-    chunks_results = chunk_pages(pages)
+    chunks_results = chunk_pages(pages, file_path.stem)
     
     markdown_path = extracts_dir / f"{file_path.stem}.md"
     markdown_path.write_text("\n\n".join(p["text"] for p in pages), encoding="utf-8")
