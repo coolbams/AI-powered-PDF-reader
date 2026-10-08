@@ -22,28 +22,34 @@ export default function UploadSidebar({ activeDoc, onSelectDoc }) {
     // isUploading is true while the PDF is being sent to the backend.
     const [isUploading, setIsUploading] = useState(false)
 
-    // Runs once when the component first appears on the screen.
-    // It fetches the existing uploaded files from the backend.
-    useEffect(() => {
-        fetchFiles()
-    }, [])
-
     // Calls the backend endpoint /list_files and stores the returned filenames.
-    const fetchFiles = async () => {
+    const fetchFiles = async (signal) => {
         try {
             setIsLoading(true)
-            const res = await fetch("http://localhost:8000/list_files")
+            const res = await fetch("http://localhost:8000/list_files", { signal })
             const data = await res.json()
 
             // The server returns { files: [...] }
             // If it returns nothing, we default to an empty array.
             setFiles(data.files || [])
         } catch (err) {
-            console.error("Failed to fetch files from backend:", err)
+            // Ignore AbortError when a request is deliberately cancelled (e.g. unmount)
+            if (err.name !== "AbortError") {
+                console.error("Failed to fetch files from backend:", err)
+            }
         } finally {
             setIsLoading(false)
         }
     }
+
+    // Runs once when the component first appears on the screen.
+    // Uses AbortController to cleanly cancel the in-flight request if unmounted.
+    useEffect(() => {
+        const controller = new AbortController()
+        fetchFiles(controller.signal)
+
+        return () => controller.abort()
+    }, [])
 
     // Runs when the user picks a PDF from their computer.
     // It sends the file to the backend using a POST request.

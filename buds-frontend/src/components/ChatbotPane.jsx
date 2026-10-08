@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react"
-import { AlertCircle, Bot, Send, UserRound } from "lucide-react"
+import { AlertCircle, Bot, Send, UserRound, FileText } from "lucide-react"
 import { Button } from "./ui/button"
 import { Textarea } from "./ui/textarea"
 
-export default function ChatbotPane({ activeDoc }) {
+export default function ChatbotPane({ activeDoc, onJumpToPage }) {
     const [messages, setMessages] = useState([])
     const [draft, setDraft] = useState("")
     const [isLoading, setIsLoading] = useState(false)
@@ -36,56 +36,84 @@ export default function ChatbotPane({ activeDoc }) {
             role: "user",
             content: query,
         }
-        const controller = new AbortController()
+        const assistantMessageId = crypto.randomUUID()
+        const assistantPlaceholder = {
+            id: assistantMessageId,
+            role: "assistant",
+            content: "",
+            sources: [],
+        }
 
+        const controller = new AbortController()
         requestControllerRef.current = controller
-        setMessages((currentMessages) => [...currentMessages, userMessage])
+
+        // Add user query and placeholder assistant message immediately
+        setMessages((currentMessages) => [...currentMessages, userMessage, assistantPlaceholder])
         setDraft("")
         setError("")
         setIsLoading(true)
-
         try {
-            const response = await fetch("http://localhost:8000/ask", {
+            const response = await fetch("http://localhost:8000/ask/stream", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query, doc_name: activeDoc, history }),
                 signal: controller.signal,
             })
 
-            let data = {}
-            try {
-                data = await response.json()
-            } catch {
-                data = {}
-            }
-
             if (!response.ok) {
-                const detail = data?.detail
-                const message = typeof detail === "string"
-                    ? detail
-                    : Array.isArray(detail)
-                        ? detail.map((entry) => entry?.msg ?? entry).filter(Boolean).join("; ")
-                        : "The question could not be answered."
-
-                throw new Error(message || "The question could not be answered.")
+                throw new Error("Failed to connect to the streaming server.")
             }
 
-            if (controller.signal.aborted) return
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder("utf-8")
+            let buffer = ""
 
-            setMessages((currentMessages) => [
-                ...currentMessages,
-                {
-                    id: crypto.randomUUID(),
-                    role: "assistant",
-                    content: data.results || "",
-                    sources: Array.isArray(data.sources) ? data.sources : [],
-                },
-            ])
+            while (true) {
+                const { value, done } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+                const parts = buffer.split("\n\n")
+                buffer = parts.pop()
+
+                for (const part of parts) {
+                    const trimmed = part.trim()
+                    if (!trimmed.startsWith("data: ")) continue
+
+                    try {
+                        const eventData = JSON.parse(trimmed.slice(6))
+
+                        if (eventData.type === "sources") {
+                            setMessages((prev) =>
+                                prev.map((msg) =>
+                                    msg.id === assistantMessageId
+                                        ? { ...msg, sources: eventData.sources || [] }
+                                        : msg
+                                )
+                            )
+                        } else if (eventData.type === "token") {
+                            setMessages((prev) =>
+                                prev.map((msg) =>
+                                    msg.id === assistantMessageId
+                                        ? { ...msg, content: msg.content + eventData.token }
+                                        : msg
+                                )
+                            )
+                        } else if (eventData.type === "error") {
+                            throw new Error(eventData.detail || "Streaming error occurred.")
+                        }
+                    } catch (parseErr) {
+                        if (parseErr.message && !parseErr.message.includes("JSON")) {
+                            throw parseErr
+                        }
+                    }
+                }
+            }
         } catch (requestError) {
             if (controller.signal.aborted) return
 
             setMessages((currentMessages) =>
-                currentMessages.filter((message) => message.id !== userMessage.id)
+                currentMessages.filter((message) => message.id !== assistantMessageId)
             )
             setDraft(query)
             setError(requestError.message || "Something went wrong. Please try again.")
@@ -95,7 +123,7 @@ export default function ChatbotPane({ activeDoc }) {
                 setIsLoading(false)
             }
         }
-    }   
+    } 
 
     const handleKeyDown = (event) => {
         if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
@@ -136,30 +164,39 @@ export default function ChatbotPane({ activeDoc }) {
                                     )}
                                 </span>
                                 <div className="min-w-0 flex-1">
-                                    <p className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-200">
-                                        {message.content}
-                                    </p>
+                                    {message.content ? (
+                                        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-200">
+                                            {message.content}
+                                            {isLoading && message.id === messages[messages.length - 1]?.id && (
+                                                <span className="inline-block w-1.5 h-4 ml-1 bg-amber-400 animate-pulse align-middle" />
+                                            )}
+                                        </p>
+                                    ) : (
+                                        <div className="flex items-center gap-2 text-xs text-gray-400 py-1" role="status">
+                                            <span className="inline-block size-2 rounded-full bg-amber-400 animate-ping" />
+                                            Thinking...
+                                        </div>
+                                    )}
+
                                     {message.sources?.length > 0 && (
-                                        <div className="mt-3 flex flex-col gap-2">
+                                        <div className="mt-3 flex flex-wrap gap-1.5">
                                             {message.sources.map((source, index) => (
-                                                <div
+                                                <button
                                                     key={`${source.page}-${index}`}
-                                                    className="text-xs text-gray-400"
+                                                    type="button"
+                                                    onClick={() => onJumpToPage?.(source.page)}
+                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-zinc-800 hover:bg-zinc-700 text-amber-300 hover:text-amber-200 border border-zinc-700/60 transition-colors cursor-pointer group"
+                                                    title={`Jump to Page ${source.page}`}
                                                 >
+                                                    <FileText className="size-3 text-amber-400/70 group-hover:text-amber-300" />
                                                     Page {source.page}
-                                                </div>
+                                                </button>
                                             ))}
                                         </div>
                                     )}
                                 </div>
                             </article>
                         ))}
-                        {isLoading && (
-                            <div className="flex items-center gap-2.5 text-sm text-gray-400" role="status">
-                                <Bot className="size-4" aria-hidden="true" />
-                                Thinking...
-                            </div>
-                        )}
                     </div>
                 )}
                 <div ref={messagesEndRef} />

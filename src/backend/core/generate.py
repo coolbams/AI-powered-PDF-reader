@@ -41,3 +41,25 @@ def generate_response(prompt: str, history: list[dict] | None = None) -> str:
         temperature=0.3,
     )
     return response.choices[0].message.content
+
+def stream_response(prompt: str, history: list[dict] | None = None):
+    """ Streams tokens from Groq LLM one-by-one as they are generated. """
+
+    messages = []
+    if history:
+        messages.extend(_trim_history(history))
+    messages.append({"role": "user", "content": prompt})
+
+    stream = client.chat.completions.create(
+        model="openai/gpt-oss-20b",
+        messages=messages,
+        max_tokens=4000,
+        temperature=0.3,
+        stream=True,
+    )
+
+    for chunk in stream:
+        token = chunk.choices[0].delta.content or ""
+        if token:
+            yield token
+

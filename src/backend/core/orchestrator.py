@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import logging
 from fastapi import HTTPException, UploadFile
@@ -7,7 +8,7 @@ from .parser import parse_pdf
 from .retrieval import Retrieval
 from .exceptions import EmptyCollectionError, DocumentNotFoundError
 from .prompt_builder import build_prompt
-from .generate import generate_response
+from .generate import generate_response, stream_response
 from .reranker import rerank
 
 logger = logging.getLogger(__name__)
@@ -84,4 +85,48 @@ def query(request: str, doc_name: str | None = None, history: list[dict] | None 
 
     return {"query": request, "results": response, "sources": sources}
 
+
+
+
+def stream_query( request: str, doc_name: str | None = None, history: list[dict] | None = None):
+    """Performs retrieval and yields SSE events: sources, token chunks, and done."""
+
+    try:
+        candidates = retrieval.search(request, doc_name=doc_name)
+        chunks = rerank(request, candidates, top_k=3)
+    except EmptyCollectionError:
+        yield f"data: {json.dumps({'type': 'error', 'detail': 'No documents have been uploaded yet. Please upload a PDF first.'})}\n\n"
+        return
+    
+    except DocumentNotFoundError as e:
+        yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"     
+        return
+
+    except Exception as e:
+        logger.exception("Retruival failed: %s", e)
+        yield f"data: {json.dumps({'type': 'error', 'detail': 'Failed to search documents. Are any PDFs embedded?'})}\n\n"
+        return
+
+    if not chunks:
+        yield f"data: {json.dumps({'type': 'error', 'detail': 'No relevant content found in the documents.'})}\n\n"
+        return
+
+    sources = [
+        {"page": c["metadata"]["page_number"]}
+        for c in chunks
+    ]
+
+    yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
+
+    prompt = build_prompt(request, chunks)
+
+    try:
+        for token in stream_response(prompt, history=history):
+            yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
+    except Exception as e:
+        logger.exception("Streaming generation failed: %s", e)
+        yield f"data: {json.dumps({'type': 'error', 'detail': 'LLM streaming failed.'})}\n\n"
+        return
+
+    yield f"data: {json.dumps({'type': 'done'})}\n\n"      
     

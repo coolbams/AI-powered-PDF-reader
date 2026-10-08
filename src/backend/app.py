@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pathlib import Path
 
@@ -48,6 +49,16 @@ async def query(body: AskRequest):
     """Receives a question, retrieves relevant chunks, and returns an LLM answer."""
 
     return orchestrator.query(body.query, body.doc_name, body.history)
+
+
+@app.post("/ask/stream")
+async def query_stream(body:AskRequest):
+    """Streams LLM tokens and sources back to the client using Server-Sent Events."""
+
+    return StreamingResponse(
+        orchestrator.stream_query(body.query, body.doc_name, body.history),
+        media_type="text/event-stream",
+    )
 
 
 @app.get("/list_files")

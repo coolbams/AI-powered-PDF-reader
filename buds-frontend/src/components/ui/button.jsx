@@ -52,4 +52,7 @@ function Button({
   )
 }
 
+// react-refresh only enforces this rule for shared constant exports, but these
+// variants are intentionally reused across button instances in this UI kit.
+/* eslint-disable react-refresh/only-export-components */
 export { Button, buttonVariants }

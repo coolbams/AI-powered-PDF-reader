@@ -12,8 +12,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString()
 
 // This component shows the selected document in the middle panel.
-// It receives the active document name as a prop from the parent.
-export default function PDFFilereader({ activeDoc }) {
+// It receives the active document name and targetPage as props from the parent.
+export default function PDFFilereader({ activeDoc, targetPage }) {
     const [viewMode, setViewMode] = useState("pdf")
     const [numPages, setNumPages] = useState(0)
     const [pageNumber, setPageNumber] = useState(1)
@@ -27,6 +27,17 @@ export default function PDFFilereader({ activeDoc }) {
         setPageNumber(1)
         setScale(1.0)
     }, [activeDoc])
+
+    // Jump to page when a citation badge is clicked in ChatbotPane
+    useEffect(() => {
+        if (targetPage) {
+            const pageNum = typeof targetPage === "object" ? targetPage.page : targetPage
+            if (pageNum && pageNum >= 1 && (numPages === 0 || pageNum <= numPages)) {
+                setPageNumber(pageNum)
+                setViewMode("pdf")
+            }
+        }
+    }, [targetPage, numPages])
 
     // Measure the viewer so page fits available width
     useEffect(() => {
