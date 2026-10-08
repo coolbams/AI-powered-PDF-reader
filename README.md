@@ -30,52 +30,32 @@ A lightweight RAG (Retrieval-Augmented Generation) app that ingests PDFs, embeds
                └──────────────────┘     └───────────┘
 ```
 
-## Project Structure
+## Monorepo Structure
+
+This repository is organized as a monorepo containing two standalone packages (`frontend/` and `backend/`):
 
 ```
 Bud/
-├── .env                        # API keys (gitignored)
-├── .env.example                # Example environment config
-├── buds-frontend/              # React frontend (Vite + Tailwind CSS v4)
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── index.html
-│   └── src/
-│       ├── App.jsx             # Root layout & page container
-│       ├── main.jsx            # React 19 entry point
-│       ├── index.css           # Tailwind v4 import & design tokens
-│       └── components/
-│           ├── Header.jsx        # Top navbar & branding
-│           ├── ThreeBodiedPane.jsx # 3-panel dashboard layout & state
-│           ├── UploadSidebar.jsx # PDF uploader & document list
-│           ├── PDFFileReader.jsx # React-PDF viewer with pagination & zoom
-│           ├── ChatbotPane.jsx   # AI query input & chat interface
-│           └── ui/               # Base UI & Shadcn components (button, toggle, etc.)
-├── src/
-│   ├── bud/
-│   │   └── __init__.py         # Package entry point
-│   ├── backend/
-│   │   ├── __init__.py
-│   │   ├── app.py              # FastAPI server & routes
-│   │   ├── core/
-│   │   │   ├── __init__.py
-│   │   │   ├── orchestrator.py # Centralizes upload, process, query logic
-│   │   │   ├── parser.py       # PDF → Markdown + metadata + chunks
-│   │   │   ├── chunker.py      # Text splitting into chunks
-│   │   │   ├── embeddings.py   # ChromaDB vector store + embeddings
-│   │   │   ├── retrieval.py    # Semantic search over embedded chunks
-│   │   │   ├── reranker.py     # Cross-encoder re-ranking for retrieved chunks
-│   │   │   ├── exceptions.py   # Custom exceptions (EmptyCollectionError, DocumentNotFoundError)
-│   │   │   ├── prompt_builder.py # Builds prompts from retrieved chunks
-│   │   │   ├── generate.py     # LLM response generation via Groq
-│   │   │   ├── doc_selector.py # Manages active document selection & file responses
-│   │   │   └── get_uploaded_files.py # Lists uploaded files from disk
-│   │   └── Media/
-│   │       ├── Uploads/        # Stored PDFs
-│   │       └── Extracts/       # Generated .md, .json, and _chunks.json files
-├── pyproject.toml              # Python project config & dependencies
-├── uv.lock                     # Python dependency lock file
-└── README.md
+├── backend/                    # Standalone FastAPI & RAG backend service
+│   ├── app.py                  # FastAPI server & route handlers
+│   ├── core/                   # Ingestion, retrieval, chunking, reranking & LLM logic
+│   ├── Media/                  # Stored uploads and extracted markdown/chunks
+│   ├── Chroma_DB/              # Persistent vector database
+│   ├── Embedding_Model/        # Local embedding model cache
+│   ├── pyproject.toml          # Python project config & dependencies
+│   ├── uv.lock                 # Dependency lock file
+│   ├── .env.example            # Environment variables template
+│   └── README.md               # Backend documentation
+│
+├── frontend/                   # Standalone React 19 + Vite + Tailwind CSS frontend
+│   ├── src/                    # App.jsx, components (ThreeBodiedPane, etc.)
+│   ├── public/                 # Static assets
+│   ├── package.json            # Scripts & dependencies
+│   ├── vite.config.js          # Vite bundler configuration
+│   └── README.md               # Frontend documentation
+│
+├── docs/                       # Architecture & design documentation
+└── README.md                   # Monorepo overview
 ```
 
 ## How It Works
@@ -87,7 +67,7 @@ Bud/
 3. **Chunk** — Text is split into overlapping chunks using `RecursiveCharacterTextSplitter`
 4. **Embed** — Chunks are embedded using `sentence-transformers` (nomic-embed-text-v1.5)
 5. **Store** — Vectors are stored in ChromaDB for semantic search
-6. **Save** — Extracted content is saved to `src/backend/Media/Extracts/` as:
+6. **Save** — Extracted content is saved to `backend/Media/Extracts/` as:
    - `<filename>.md` — full Markdown of the document
    - `<filename>.json` — per-page text with page numbers
    - `<filename>_chunks.json` — text chunks with page metadata
@@ -410,15 +390,15 @@ Ensure your `GROQ_API_KEY` is set correctly in the `.env` file. Get a free key a
 
 ### ChromaDB data persists between runs
 
-ChromaDB stores data in `src/backend/Chroma_DB/`. To reset the vector store, delete this directory:
+ChromaDB stores data in `backend/Chroma_DB/`. To reset the vector store, delete this directory:
 
 ```bash
-rm -rf src/backend/Chroma_DB/
+rm -rf backend/Chroma_DB/
 ```
 
 ### Duplicate upload errors
 
-If you upload the same PDF twice, ChromaDB will throw an error due to duplicate chunk IDs (e.g., `ID ... already exists`). To resolve this, reset the vector database directory (`rm -rf src/backend/Chroma_DB/`) or rename the file before uploading.
+If you upload the same PDF twice, ChromaDB will throw an error due to duplicate chunk IDs (e.g., `ID ... already exists`). To resolve this, reset the vector database directory (`rm -rf backend/Chroma_DB/`) or rename the file before uploading.
 
 ## Limitations
 
@@ -443,14 +423,15 @@ If you upload the same PDF twice, ChromaDB will throw an error due to duplicate 
 | Cross-encoder re-ranking | ✅ Done |
 | SSE response streaming (`/ask/stream`) | ✅ Done |
 | Streamlit frontend | ⚠️ Legacy / Deprecated |
-| React frontend (`buds-frontend`) | ✅ Done |
+| React frontend (`frontend/`) | ✅ Done |
 
 ## Development
 
 ### Backend
 
 ```bash
-uv run uvicorn src.backend.app:app --reload
+cd backend
+uv run uvicorn app:app --reload --port 8000
 ```
 
 FastAPI provides interactive API docs at `http://localhost:8000/docs`.
@@ -458,7 +439,8 @@ FastAPI provides interactive API docs at `http://localhost:8000/docs`.
 ### Frontend
 
 ```bash
-cd buds-frontend
+cd frontend
+npm install
 npm run dev
 ```
 

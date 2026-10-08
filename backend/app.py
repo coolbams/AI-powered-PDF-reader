@@ -4,9 +4,15 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pathlib import Path
 
-from backend.core import orchestrator
-from backend.core.get_uploaded_files import get_file_list
-from backend.core.doc_selector import set_document
+try:
+    from core import orchestrator
+    from core.get_uploaded_files import get_file_list
+    from core.doc_selector import set_document
+except ImportError:
+    from backend.core import orchestrator
+    from backend.core.get_uploaded_files import get_file_list
+    from backend.core.doc_selector import set_document
+
 
 
 class AskRequest(BaseModel):

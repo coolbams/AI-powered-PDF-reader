@@ -12,17 +12,9 @@ wheels/
 # Environment variables
 .env
 .env.*
-*.env
 !.env.example
 
-# Media, databases, and model weights
-**/Media/
-**/Uploads/
-**/Extracts/
-**/Embedding_Model/
-**/Chroma_DB/
-
-# Node / Frontend
-node_modules/
-dist/
-.DS_Store
+# Runtime and data directories
+Media/
+Embedding_Model/
+Chroma_DB/
