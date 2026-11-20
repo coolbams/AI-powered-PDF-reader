@@ -1,6 +1,7 @@
+import os
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, PlainTextResponse
 from pydantic import BaseModel
 from pathlib import Path
 
@@ -30,10 +31,13 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(debug=True, title= "Bud's Rag Server")
 
+origins_env = os.getenv("CORS_ORIGINS", "*")
+allowed_origins = [o.strip() for o in origins_env.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -85,5 +89,32 @@ def get_selcted_doc( filename: str ):
     """Marks the named PDF as the active document and streams it back to the client."""
 
     return set_document(filename)
+
+
+@app.get("/markdown/{filename}")
+def get_extracted_markdown(filename: str):
+    """Returns the parsed per-page markdown list for an uploaded document."""
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename: path traversal characters are not permitted.")
+    safe_name = Path(filename).name
+    if safe_name.lower().endswith(".pdf"):
+        safe_name = Path(safe_name).stem
+    extracts_dir = (BASE_DIR / "Media" / "Extracts").resolve()
+    json_path = (extracts_dir / f"{safe_name}.json").resolve()
+    md_path = (extracts_dir / f"{safe_name}.md").resolve()
+
+    if not json_path.is_relative_to(extracts_dir):
+        raise HTTPException(status_code=400, detail="Access outside extracts directory is forbidden.")
+
+    import json
+    if json_path.is_file():
+        pages = json.loads(json_path.read_text(encoding="utf-8"))
+        return {"filename": safe_name, "pages": pages}
+
+    if md_path.is_file():
+        return {"filename": safe_name, "pages": [{"page_number": 1, "text": md_path.read_text(encoding="utf-8")}]}
+
+    raise HTTPException(status_code=404, detail=f"Markdown extract for '{filename}' not found.")
+
 
 

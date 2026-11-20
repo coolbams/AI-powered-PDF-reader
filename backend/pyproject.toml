@@ -17,13 +17,8 @@ dependencies = [
     "pymupdf4llm>=1.28.2",
     "requests>=2.34.2",
     "sentence-transformers>=6.0.1",
-    "streamlit>=1.64.0",
-    "streamlit-pdf>=2.0.1",
     "tiktoken>=0.14.0",
 ]
-
-[project.scripts]
-bud = "bud:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]

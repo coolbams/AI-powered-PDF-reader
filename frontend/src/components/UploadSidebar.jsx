@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react"
 import { PanelLeft, Plus, FileText } from "lucide-react"
 import { Button } from "@base-ui/react/button"
+import { API_BASE_URL } from "../config"
 
 // This component is the left sidebar for managing uploaded PDFs.
 // It lets the user:
@@ -26,7 +27,7 @@ export default function UploadSidebar({ activeDoc, onSelectDoc }) {
     const fetchFiles = async (signal) => {
         try {
             setIsLoading(true)
-            const res = await fetch("http://localhost:8000/list_files", { signal })
+            const res = await fetch(`${API_BASE_URL}/list_files`, { signal })
             const data = await res.json()
 
             // The server returns { files: [...] }
@@ -64,7 +65,7 @@ export default function UploadSidebar({ activeDoc, onSelectDoc }) {
             const formData = new FormData()
             formData.append("file", selectedFile)
 
-            const res = await fetch("http://localhost:8000/upload", {
+            const res = await fetch(`${API_BASE_URL}/upload`, {
                 method: "POST",
                 body: formData,
             })

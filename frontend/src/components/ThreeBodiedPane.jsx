@@ -27,7 +27,7 @@ export default function ThreeBodiedPane() {
     return (
         <div className="w-full flex-1 min-h-0 pb-6 flex gap-8 flex-row" id="panels container">
             {/* Left panel: upload files and select an active document */}
-            <div className="flex-1 h-full min-h-0">
+            <div className="flex-1 h-full min-h-0 max-w-sm">
                 <UploadSidebar activeDoc={activeDoc} onSelectDoc={handleSelectDoc} />
             </div>
 

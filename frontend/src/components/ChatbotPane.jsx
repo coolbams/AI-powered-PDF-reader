@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react"
 import { AlertCircle, Bot, Send, UserRound, FileText } from "lucide-react"
 import { Button } from "./ui/button"
 import { Textarea } from "./ui/textarea"
+import { marked } from "marked"
+import { API_BASE_URL } from "../config"
 
 export default function ChatbotPane({ activeDoc, onJumpToPage }) {
     const [messages, setMessages] = useState([])
@@ -53,7 +55,7 @@ export default function ChatbotPane({ activeDoc, onJumpToPage }) {
         setError("")
         setIsLoading(true)
         try {
-            const response = await fetch("http://localhost:8000/ask/stream", {
+            const response = await fetch(`${API_BASE_URL}/ask/stream`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query, doc_name: activeDoc, history }),
@@ -165,12 +167,21 @@ export default function ChatbotPane({ activeDoc, onJumpToPage }) {
                                 </span>
                                 <div className="min-w-0 flex-1">
                                     {message.content ? (
-                                        <p className="whitespace-pre-wrap wrap-break-words text-sm leading-6 text-gray-200">
-                                            {message.content}
-                                            {isLoading && message.id === messages[messages.length - 1]?.id && (
-                                                <span className="inline-block w-1.5 h-4 ml-1 bg-grey-400 animate-pulse align-middle" />
-                                            )}
-                                        </p>
+                                        message.role === "assistant" ? (
+                                            <div className="text-sm leading-6 text-gray-200">
+                                                <div
+                                                    className="chat-markdown"
+                                                    dangerouslySetInnerHTML={{ __html: marked.parse(message.content) }}
+                                                />
+                                                {isLoading && message.id === messages[messages.length - 1]?.id && (
+                                                    <span className="inline-block w-1.5 h-4 ml-1 bg-gray-400 animate-pulse align-middle" />
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <p className="whitespace-pre-wrap wrap-break-words text-sm leading-6 text-gray-200">
+                                                {message.content}
+                                            </p>
+                                        )
                                     ) : (
                                         <div className="flex items-center gap-2 text-xs text-gray-400 py-1" role="status">
                                             <span className="inline-block size-2 rounded-full bg-grey-400 animate-ping" />

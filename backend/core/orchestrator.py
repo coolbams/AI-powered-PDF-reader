@@ -17,7 +17,7 @@ retrieval = Retrieval()
 def validate(file: UploadFile):
     """Raises a 400 HTTP error if the uploaded file is not a PDF."""
 
-    if not file.filename.endswith(".pdf"):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 
 async def save(file: UploadFile, upload_dir: Path) -> Path:

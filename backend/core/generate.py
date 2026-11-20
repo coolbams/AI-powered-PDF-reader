@@ -5,12 +5,18 @@ import os
 
 load_dotenv()
 
-api_key = os.getenv("GROQ_API_KEY")
-
-client = Groq(api_key=api_key)
-
 MAX_HISTORY_TOKENS = 4000
 enc = tiktoken.get_encoding("o200k_base")
+
+_client = None
+
+
+def get_client() -> Groq:
+    """Creates the Groq client on first use and reuses it."""
+    global _client
+    if _client is None:
+        _client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    return _client
 
 
 def _trim_history(history: list[dict]) -> list[dict]:
@@ -34,7 +40,7 @@ def generate_response(prompt: str, history: list[dict] | None = None) -> str:
         messages.extend(_trim_history(history))
     messages.append({"role": "user", "content": prompt})
 
-    response = client.chat.completions.create(
+    response = get_client().chat.completions.create(
         model="openai/gpt-oss-20b",
         messages=messages,
         max_tokens=4000,
@@ -42,15 +48,16 @@ def generate_response(prompt: str, history: list[dict] | None = None) -> str:
     )
     return response.choices[0].message.content
 
+
 def stream_response(prompt: str, history: list[dict] | None = None):
-    """ Streams tokens from Groq LLM one-by-one as they are generated. """
+    """Streams tokens from Groq LLM one-by-one as they are generated."""
 
     messages = []
     if history:
         messages.extend(_trim_history(history))
     messages.append({"role": "user", "content": prompt})
 
-    stream = client.chat.completions.create(
+    stream = get_client().chat.completions.create(
         model="openai/gpt-oss-20b",
         messages=messages,
         max_tokens=4000,
@@ -62,4 +69,3 @@ def stream_response(prompt: str, history: list[dict] | None = None):
         token = chunk.choices[0].delta.content or ""
         if token:
             yield token
-

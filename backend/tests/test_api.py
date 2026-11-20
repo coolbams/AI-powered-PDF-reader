@@ -65,6 +65,37 @@ class TestAppEndpoints(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("File is empty", response.text)
 
+    def test_markdown_endpoint_not_found(self):
+        """GET /markdown/{filename} returns 404 for missing markdown file."""
+        response = self.client.get("/markdown/non_existent_doc")
+        self.assertEqual(response.status_code, 404)
+
+    def test_markdown_endpoint_traversal_blocked(self):
+        """GET /markdown/{filename} returns 400 when traversal is attempted."""
+        response = self.client.get("/markdown/..invalid")
+        self.assertEqual(response.status_code, 400)
+
+    def test_markdown_endpoint_success(self):
+        """GET /markdown/{filename} returns structured pages list when extract exists."""
+        from app import BASE_DIR
+        import json
+        extracts_dir = BASE_DIR / "Media" / "Extracts"
+        extracts_dir.mkdir(parents=True, exist_ok=True)
+        test_json = extracts_dir / "__test_sample__.json"
+        test_json.write_text(
+            json.dumps([{"page_number": 1, "text": "# Test Markdown Header\nSome content"}]),
+            encoding="utf-8",
+        )
+        try:
+            response = self.client.get("/markdown/__test_sample__")
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertIn("pages", data)
+            self.assertEqual(data["pages"][0]["page_number"], 1)
+            self.assertIn("# Test Markdown Header", data["pages"][0]["text"])
+        finally:
+            test_json.unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()
