@@ -2,15 +2,38 @@ import chromadb
 from .embeddings import EmbeddingModel, CHROMA_DB_PATH
 from .exceptions import EmptyCollectionError, DocumentNotFoundError
 
-embed = EmbeddingModel()
+_embed_model = None
+
+
+def get_embed_model() -> EmbeddingModel:
+    """Returns the cached EmbeddingModel instance, instantiating it on first call."""
+    global _embed_model
+    if _embed_model is None:
+        _embed_model = EmbeddingModel()
+    return _embed_model
+
+
+def __getattr__(name: str):
+    """Backwards compatibility for direct retrieval.embed access."""
+    if name == "embed":
+        return get_embed_model()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 class Retrieval:
     """Connects to ChromaDB and performs semantic search over embedded PDF chunks."""
 
-    def __init__(self):
+    def __init__(self, embed_model: EmbeddingModel | None = None):
         """Initialises the ChromaDB client and opens the shared embeddings collection."""
         self.client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
         self.collection = self.client.get_or_create_collection("my_embedded_pdfs")
+        self._embed_model = embed_model
+
+    @property
+    def embed(self) -> EmbeddingModel:
+        if self._embed_model is None:
+            self._embed_model = get_embed_model()
+        return self._embed_model
 
     def search(self, query: str, top_k: int = 20, doc_name: str | None = None) -> list[dict]:
         """Embeds the query and returns the top-k most relevant chunks from the vector store.
@@ -20,7 +43,7 @@ class Retrieval:
         if self.collection.count() == 0:
             raise EmptyCollectionError("No documents have been uploaded yet.")
 
-        query_embedding = embed.embed_query(query)
+        query_embedding = self.embed.embed_query(query)
 
         where_filter = {"doc_name": doc_name} if doc_name else None
 

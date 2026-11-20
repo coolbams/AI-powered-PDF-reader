@@ -4,6 +4,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from pathlib import Path
 
+import asyncio
+
 try:
     from core import orchestrator
     from core.get_uploaded_files import get_file_list
@@ -47,7 +49,7 @@ def home():
 async def upload(file: UploadFile = File(...)):
     """Saves the uploaded PDF to disk, parses it, and stores its embeddings."""
     file_path = await orchestrator.save(file, UPLOAD_DIR)
-    return orchestrator.process(file_path)
+    return await asyncio.to_thread(orchestrator.process, file_path) # Threadpool Worker via asyncio.to_thread
 
 
 @app.post("/ask")

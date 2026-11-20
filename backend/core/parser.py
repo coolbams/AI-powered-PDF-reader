@@ -44,7 +44,7 @@ def parse_pdf(file_path: str | Path) -> dict[str, Path]:
         encoding="utf-8",
     )
 
-    embed(str(chunks_path), file_path.stem)
+    embed(data, file_path.stem)
 
     return {"markdown": markdown_path, "metadata": metadata_path, "chunks": chunks_path}
 

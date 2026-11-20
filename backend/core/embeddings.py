@@ -18,6 +18,24 @@ CHROMA_DB_PATH.mkdir(parents=True, exist_ok=True)
 
 embedding_model = os.getenv("EMBEDDING_MODEL")
 
+_embed_model = None
+
+
+def get_embed_model() -> EmbeddingModel:
+    """Returns the cached EmbeddingModel instance, instantiating it on first call."""
+    global _embed_model
+    if _embed_model is None:
+        _embed_model = EmbeddingModel()
+    return _embed_model
+
+def __getattr__(name: str):
+    """Backwards compatibility for direct retrieval.embed access."""
+    if name == "embed":
+        return get_embed_model()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+
 
 class EmbeddingModel:
     """Wraps a SentenceTransformer model to embed documents and queries with task prefixes."""
@@ -26,7 +44,7 @@ class EmbeddingModel:
         """Loads the SentenceTransformer model from the local cache folder."""
         self.model = SentenceTransformer(
             model_name,
-            local_files_only=True,
+            local_files_only=False,
             trust_remote_code=False,
             cache_folder=cache_folder
         )
@@ -58,33 +76,39 @@ def generate_ids(chunks, doc_name):
 
     return ids
 
-def embed(chunk_file_path: str, filename: str) -> None:
-    """Reads the chunks JSON file, generates embeddings, and stores them in ChromaDB."""
+def embed(chunks: list[dict] | str | Path, filename: str) -> None:
+    """Generates embeddings for chunks and stores them in ChromaDB.
+    Accepts either an in-memory list of chunk dicts or a path to a JSON chunks file."""
     embeder = EmbeddingModel()
 
     try:
         client = chromadb.PersistentClient(path=str(CHROMA_DB_PATH))
         collection = client.get_or_create_collection("my_embedded_pdfs")
-    
-        with open(chunk_file_path, "r", encoding="utf-8") as f:
-            chunks = json.load(f)
-    
-        texts = [chunk["text"] for chunk in chunks]
-        metadatas = [chunk["metadata"] for chunk in chunks]
-        ids = generate_ids(chunks, filename)
-    
+
+        if isinstance(chunks, (str, Path)):
+            with open(chunks, "r", encoding="utf-8") as f:
+                chunks_list = json.load(f)
+        else:
+            chunks_list = chunks
+
+        if not chunks_list:
+            return
+
+        texts = [chunk["text"] for chunk in chunks_list]
+        metadatas = [chunk["metadata"] for chunk in chunks_list]
+        ids = generate_ids(chunks_list, filename)
+
         embeddings = embeder.embed_documents(texts)
-    
-    
-        collection.add(
+
+        collection.upsert(
             ids=ids,
             embeddings=embeddings,
             documents=texts,
             metadatas=metadatas,
         )
-        
-    except  FileNotFoundError as e:
-        print(f"Error: Chunks file not found: {chunk_file_path}")
+
+    except FileNotFoundError as e:
+        print(f"Error: Chunks file not found: {chunks}")
         raise
     except json.JSONDecodeError as e:
         print(f"Error: Invalid JSON in chunks file: {e}")

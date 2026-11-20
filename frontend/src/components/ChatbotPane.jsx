@@ -165,15 +165,15 @@ export default function ChatbotPane({ activeDoc, onJumpToPage }) {
                                 </span>
                                 <div className="min-w-0 flex-1">
                                     {message.content ? (
-                                        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-200">
+                                        <p className="whitespace-pre-wrap wrap-break-words text-sm leading-6 text-gray-200">
                                             {message.content}
                                             {isLoading && message.id === messages[messages.length - 1]?.id && (
-                                                <span className="inline-block w-1.5 h-4 ml-1 bg-amber-400 animate-pulse align-middle" />
+                                                <span className="inline-block w-1.5 h-4 ml-1 bg-grey-400 animate-pulse align-middle" />
                                             )}
                                         </p>
                                     ) : (
                                         <div className="flex items-center gap-2 text-xs text-gray-400 py-1" role="status">
-                                            <span className="inline-block size-2 rounded-full bg-amber-400 animate-ping" />
+                                            <span className="inline-block size-2 rounded-full bg-grey-400 animate-ping" />
                                             Thinking...
                                         </div>
                                     )}
@@ -185,10 +185,10 @@ export default function ChatbotPane({ activeDoc, onJumpToPage }) {
                                                     key={`${source.page}-${index}`}
                                                     type="button"
                                                     onClick={() => onJumpToPage?.(source.page)}
-                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-zinc-800 hover:bg-zinc-700 text-amber-300 hover:text-amber-200 border border-zinc-700/60 transition-colors cursor-pointer group"
+                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-zinc-800 hover:bg-zinc-700 text-gray-200 hover:text-grey-400 border border-zinc-700/60 transition-colors cursor-pointer group"
                                                     title={`Jump to Page ${source.page}`}
                                                 >
-                                                    <FileText className="size-3 text-amber-400/70 group-hover:text-amber-300" />
+                                                    <FileText className="size-3 text-grey-400/70 group-hover:text-grey-300" />
                                                     Page {source.page}
                                                 </button>
                                             ))}
@@ -227,7 +227,7 @@ export default function ChatbotPane({ activeDoc, onJumpToPage }) {
                         aria-label="Send message"
                         title="Send message"
                         disabled={!activeDoc || !draft.trim() || isLoading}
-                        className="size-9 rounded-lg bg-amber-500 text-black hover:bg-amber-400"
+                        className="size-9 rounded-lg bg-gray-400 text-black hover:bg-white"
                     >
                         <Send className="size-4" aria-hidden="true" />
                     </Button>
