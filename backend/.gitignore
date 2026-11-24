@@ -18,3 +18,5 @@ wheels/
 Media/
 Embedding_Model/
 Chroma_DB/
+Staging/*/
+logs/

@@ -1,17 +1,6 @@
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOAD_DIR = BASE_DIR / "Media" / "Uploads"
+from .supabase_service import list_document_filenames
 
 
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-def get_file_list():
-    """Scans the Uploads directory and returns a list of all stored PDF filenames."""
-    
-    file_names = [f.stem for f in UPLOAD_DIR.iterdir() if f.is_file() and f.suffix == ".pdf"]
-
-    return file_names
-
-
-
+def get_file_list() -> list[str]:
+    """Retrieves the list of all registered PDF filenames directly from Supabase PostgreSQL."""
+    return list_document_filenames()

@@ -4,6 +4,7 @@ import { FileText, Form, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, ArrowDownUp
 import { Button } from "@base-ui/react/button"
 import { Document, Page, pdfjs } from "react-pdf"
 import { marked } from "marked"
+import DOMPurify from "dompurify"
 import { API_BASE_URL } from "../config"
 import "react-pdf/dist/Page/AnnotationLayer.css"
 import "react-pdf/dist/Page/TextLayer.css"
@@ -201,7 +202,7 @@ export default function PDFFilereader({ activeDoc, targetPage }) {
             {/* Unified Top Control Sub-Bar */}
             <div className="w-full h-11 px-4 border-b border-zinc-800/80 bg-[#161616] flex items-center justify-between text-xs text-gray-300 select-none shrink-0" id="Sub-Bar">
                 {/* Left: Page Navigation */}
-                <div className="flex items-center gap-1.5 min-w-[170px]">
+                <div className="flex items-center gap-1.5 min-w-42.5">
                     {activeDoc && (
                         <>
                             <Button
@@ -409,7 +410,7 @@ export default function PDFFilereader({ activeDoc, targetPage }) {
                                         </div>
                                         <div
                                             className="markdown-body"
-                                            dangerouslySetInnerHTML={{ __html: marked.parse(page.text || "") }}
+                                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(page.text || "")) }}
                                         />
                                     </section>
                                 ))}
@@ -434,7 +435,7 @@ export default function PDFFilereader({ activeDoc, targetPage }) {
                                             </div>
                                             <div
                                                 className="markdown-body"
-                                                dangerouslySetInnerHTML={{ __html: marked.parse(curPage.text || "") }}
+                                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(curPage.text || "")) }}
                                             />
                                         </section>
                                     )

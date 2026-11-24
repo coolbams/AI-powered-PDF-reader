@@ -5,6 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 
+
 load_dotenv()
 
 
@@ -94,6 +95,14 @@ def embed(chunks: list[dict] | str | Path, filename: str) -> None:
         if not chunks_list:
             return
 
+        existing_ids = set()
+        try:
+            existing = collection.get(where={"doc_name": filename})
+            if existing and isinstance(existing.get("ids"), list):
+                existing_ids = set(existing["ids"])
+        except Exception:
+            existing_ids = set()
+
         texts = [chunk["text"] for chunk in chunks_list]
         metadatas = [chunk["metadata"] for chunk in chunks_list]
         ids = generate_ids(chunks_list, filename)
@@ -106,6 +115,10 @@ def embed(chunks: list[dict] | str | Path, filename: str) -> None:
             documents=texts,
             metadatas=metadatas,
         )
+
+        obsolete_ids = list(existing_ids - set(ids))
+        if obsolete_ids:
+            collection.delete(ids=obsolete_ids)
 
     except FileNotFoundError as e:
         print(f"Error: Chunks file not found: {chunks}")

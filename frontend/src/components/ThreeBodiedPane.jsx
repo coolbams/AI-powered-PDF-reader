@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import ChatbotPane from "./ChatbotPane";
-import PDFFilereader from "./PDFFileReader";
 import UploadSidebar from "./UploadSidebar";
+
+const PDFFilereader = lazy(() => import("./PDFFileReader"));
 
 // This is the main dashboard layout.
 // It owns the selected file so all three panels can respond to it.
@@ -33,7 +34,15 @@ export default function ThreeBodiedPane() {
 
             {/* Middle panel: preview the selected PDF */}
             <div className="flex-2 h-full min-h-0">
-                <PDFFilereader activeDoc={activeDoc} targetPage={targetPage} />
+                <Suspense
+                    fallback={
+                        <div className="flex items-center justify-center h-full bg-[#18181b] border border-zinc-800 rounded-2xl text-zinc-400">
+                            <span className="text-sm">Loading document viewer...</span>
+                        </div>
+                    }
+                >
+                    <PDFFilereader activeDoc={activeDoc} targetPage={targetPage} />
+                </Suspense>
             </div>
 
             {/* Right panel: ask questions based on the chosen document */}

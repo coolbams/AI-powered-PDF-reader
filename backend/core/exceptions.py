@@ -5,3 +5,7 @@ class EmptyCollectionError(Exception):
 
 class DocumentNotFoundError(Exception):
     """Raised when the requested doc_name has no chunks in the collection."""
+
+class ConfigurationError(Exception):
+    """Raised when a required configuration or service credential is missing."""
+

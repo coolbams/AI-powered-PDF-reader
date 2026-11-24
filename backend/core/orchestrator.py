@@ -1,9 +1,21 @@
+"""
+orchestrator.py
+Coordinates the full upload & ingestion pipeline:
+  1. Stream incoming file to Staging/<doc_id>/ scratch directory (not OS tempfile).
+  2. Run PDF text extraction writing extracts to staging.
+  3. Sync all staged files to Supabase Storage + PostgreSQL with retry on failure.
+  4. Staging directory is only deleted once Supabase fully confirms receipt.
+"""
+
 import json
-from pathlib import Path
 import logging
+from pathlib import Path
+
 from fastapi import HTTPException, UploadFile
 from groq import APIConnectionError, AuthenticationError, RateLimitError
 
+from .staging_manager import StagingContext, create_staging_area, update_state
+from .supabase_sync import sync_to_supabase
 from .parser import parse_pdf
 from .retrieval import Retrieval
 from .exceptions import EmptyCollectionError, DocumentNotFoundError
@@ -14,36 +26,99 @@ from .reranker import rerank
 logger = logging.getLogger(__name__)
 retrieval = Retrieval()
 
-def validate(file: UploadFile):
-    """Raises a 400 HTTP error if the uploaded file is not a PDF."""
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024   # 50 MB
+UPLOAD_READ_SIZE = 1 * 1024 * 1024   # 1 MB per read chunk
 
+
+def validate(file: UploadFile) -> None:
+    """Raises 400 if the uploaded file is not a PDF."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 
-async def save(file: UploadFile, upload_dir: Path) -> Path:
-    """Validates, reads, and writes the uploaded file to disk; returns its saved path."""
 
+async def save(file: UploadFile) -> StagingContext:
+    """
+    Validates the upload, creates a staging area on disk, and streams the
+    incoming PDF into Staging/<doc_id>/<filename> in bounded chunks.
+    Returns the StagingContext. The staging directory is NOT deleted here —
+    it persists until Supabase confirms receipt.
+    """
     validate(file)
-    content = await file.read()
-    if len(content) == 0:
-        raise HTTPException(status_code=400, detail="File is empty")
-    if len(content) > 20 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 20MB)")
-
     safe_name = Path(file.filename).name
-    file_path = upload_dir / safe_name
-    file_path.write_bytes(content)
+    ctx = create_staging_area(safe_name)
 
-    return file_path
+    try:
+        size = 0
+        with open(ctx.pdf_path, "wb") as out:
+            while chunk := await file.read(min(UPLOAD_READ_SIZE, MAX_UPLOAD_SIZE - size + 1)):
+                size += len(chunk)
+                if size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+                out.write(chunk)
 
-def process(file_path: Path) -> dict:
-    """Parses the PDF at file_path and triggers embedding; returns the output file paths."""
+        if size == 0:
+            raise HTTPException(status_code=400, detail="File is empty")
 
-    return parse_pdf(file_path)
+        update_state(ctx, {"file_size": size, "status": "saved"})
+        logger.info("[Orchestrator] Streamed '%s' (%d bytes) to staging.", safe_name, size)
+        return ctx
+
+    except HTTPException:
+        # Clean up staging dir on validation/size errors
+        import shutil
+        if ctx.dir.exists():
+            shutil.rmtree(ctx.dir)
+        raise
+
+
+def process(ctx: StagingContext) -> dict:
+    """
+    Runs the full ingestion pipeline on the staged PDF:
+    1. Extracts text, chunks, and writes to staging disk.
+    2. Embeds chunks into ChromaDB.
+    3. Syncs all staged files to Supabase Storage + DB (with retry).
+    4. Staging dir is auto-deleted by sync_to_supabase on success.
+
+    If Supabase sync fails, staging files remain on disk for auto-resume on restart.
+    """
+    state_data = {}
+    try:
+        from .staging_manager import read_state
+        state_data = read_state(ctx)
+    except Exception:
+        pass
+
+    file_size = state_data.get("file_size", 0)
+
+    try:
+        page_count = parse_pdf(ctx)
+    except Exception as e:
+        logger.exception("[Orchestrator] PDF parsing failed for '%s': %s", ctx.filename, e)
+        update_state(ctx, {"status": "parse_failed", "last_error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to process PDF: {e}")
+
+    try:
+        sync_to_supabase(ctx, file_size=file_size, page_count=page_count)
+    except Exception as e:
+        logger.exception(
+            "[Orchestrator] Supabase sync failed for '%s': %s. Staging files preserved for retry.",
+            ctx.filename, e
+        )
+        update_state(ctx, {"status": "sync_failed", "last_error": str(e)})
+        raise HTTPException(
+            status_code=502,
+            detail="PDF processed but could not sync to storage. Will retry automatically on restart."
+        )
+
+    return {
+        "filename": ctx.filename,
+        "page_count": page_count,
+        "status": "processed",
+    }
+
 
 def query(request: str, doc_name: str | None = None, history: list[dict] | None = None) -> dict:
     """Searches for relevant chunks and generates an LLM answer for the given question."""
-
     try:
         candidates = retrieval.search(request, doc_name=doc_name)
         chunks = rerank(request, candidates, top_k=3)
@@ -74,36 +149,23 @@ def query(request: str, doc_name: str | None = None, history: list[dict] | None 
     except Exception:
         raise HTTPException(status_code=502, detail="LLM service unavailable. Try again later.")
 
-    sources = [
-        {
-            # "text": c["text"][:200] + "..." if len(c["text"]) > 200 else c["text"],
-            "page": c["metadata"]["page_number"],
-            # "doc_name": c["metadata"].get("doc_name"),
-        }
-        for c in chunks
-    ]
-
+    sources = [{"page": c["metadata"]["page_number"]} for c in chunks]
     return {"query": request, "results": response, "sources": sources}
 
 
-
-
-def stream_query( request: str, doc_name: str | None = None, history: list[dict] | None = None):
+def stream_query(request: str, doc_name: str | None = None, history: list[dict] | None = None):
     """Performs retrieval and yields SSE events: sources, token chunks, and done."""
-
     try:
         candidates = retrieval.search(request, doc_name=doc_name)
         chunks = rerank(request, candidates, top_k=3)
     except EmptyCollectionError:
         yield f"data: {json.dumps({'type': 'error', 'detail': 'No documents have been uploaded yet. Please upload a PDF first.'})}\n\n"
         return
-    
     except DocumentNotFoundError as e:
-        yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"     
+        yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"
         return
-
     except Exception as e:
-        logger.exception("Retruival failed: %s", e)
+        logger.exception("Retrieval failed: %s", e)
         yield f"data: {json.dumps({'type': 'error', 'detail': 'Failed to search documents. Are any PDFs embedded?'})}\n\n"
         return
 
@@ -111,11 +173,7 @@ def stream_query( request: str, doc_name: str | None = None, history: list[dict]
         yield f"data: {json.dumps({'type': 'error', 'detail': 'No relevant content found in the documents.'})}\n\n"
         return
 
-    sources = [
-        {"page": c["metadata"]["page_number"]}
-        for c in chunks
-    ]
-
+    sources = [{"page": c["metadata"]["page_number"]} for c in chunks]
     yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
 
     prompt = build_prompt(request, chunks)
@@ -128,5 +186,4 @@ def stream_query( request: str, doc_name: str | None = None, history: list[dict]
         yield f"data: {json.dumps({'type': 'error', 'detail': 'LLM streaming failed.'})}\n\n"
         return
 
-    yield f"data: {json.dumps({'type': 'done'})}\n\n"      
-    
+    yield f"data: {json.dumps({'type': 'done'})}\n\n"

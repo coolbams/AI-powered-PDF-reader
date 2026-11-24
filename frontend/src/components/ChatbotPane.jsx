@@ -3,6 +3,7 @@ import { AlertCircle, Bot, Send, UserRound, FileText } from "lucide-react"
 import { Button } from "./ui/button"
 import { Textarea } from "./ui/textarea"
 import { marked } from "marked"
+import DOMPurify from "dompurify"
 import { API_BASE_URL } from "../config"
 
 export default function ChatbotPane({ activeDoc, onJumpToPage }) {
@@ -171,7 +172,7 @@ export default function ChatbotPane({ activeDoc, onJumpToPage }) {
                                             <div className="text-sm leading-6 text-gray-200">
                                                 <div
                                                     className="chat-markdown"
-                                                    dangerouslySetInnerHTML={{ __html: marked.parse(message.content) }}
+                                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(message.content)) }}
                                                 />
                                                 {isLoading && message.id === messages[messages.length - 1]?.id && (
                                                     <span className="inline-block w-1.5 h-4 ml-1 bg-gray-400 animate-pulse align-middle" />

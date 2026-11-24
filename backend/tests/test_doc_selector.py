@@ -1,37 +1,37 @@
 import unittest
-from pathlib import Path
+from unittest.mock import patch
 from fastapi import HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
-from core.doc_selector import set_document, UPLOAD_DIR
+from core.doc_selector import set_document
 from core.get_uploaded_files import get_file_list
 
 
 class TestDocSelector(unittest.TestCase):
     def setUp(self):
-        """Create a temporary test PDF file in UPLOAD_DIR."""
         self.test_pdf_name = "__ci_test_dummy_doc__"
-        self.test_pdf_path = UPLOAD_DIR / f"{self.test_pdf_name}.pdf"
-        self.test_pdf_path.write_bytes(b"%PDF-1.4 dummy content")
+        self.mock_content = b"%PDF-1.4 dummy content"
 
-    def tearDown(self):
-        """Clean up the temporary test PDF."""
-        if self.test_pdf_path.exists():
-            self.test_pdf_path.unlink()
-
-    def test_valid_file_without_extension(self):
-        """Requesting filename without .pdf returns FileResponse."""
+    @patch("core.doc_selector.download_bytes")
+    def test_valid_file_without_extension(self, mock_download):
+        """Requesting filename without .pdf returns Response with PDF bytes."""
+        mock_download.return_value = self.mock_content
         response = set_document(self.test_pdf_name)
-        self.assertIsInstance(response, FileResponse)
-        self.assertEqual(Path(response.path), self.test_pdf_path)
+        self.assertIsInstance(response, Response)
+        self.assertEqual(response.body, self.mock_content)
+        mock_download.assert_called_once_with(f"pdfs/{self.test_pdf_name}.pdf")
 
-    def test_valid_file_with_extension(self):
-        """Requesting filename with .pdf returns FileResponse."""
+    @patch("core.doc_selector.download_bytes")
+    def test_valid_file_with_extension(self, mock_download):
+        """Requesting filename with .pdf returns Response with PDF bytes."""
+        mock_download.return_value = self.mock_content
         response = set_document(f"{self.test_pdf_name}.pdf")
-        self.assertIsInstance(response, FileResponse)
-        self.assertEqual(Path(response.path), self.test_pdf_path)
+        self.assertIsInstance(response, Response)
+        self.assertEqual(response.body, self.mock_content)
+        mock_download.assert_called_once_with(f"pdfs/{self.test_pdf_name}.pdf")
 
-    def test_file_not_found(self):
+    @patch("core.doc_selector.download_bytes", return_value=None)
+    def test_file_not_found(self, mock_download):
         """Requesting a nonexistent file raises 404."""
         with self.assertRaises(HTTPException) as ctx:
             set_document("nonexistent_file_xyz_123")
@@ -49,8 +49,10 @@ class TestDocSelector(unittest.TestCase):
             set_document("/etc/passwd")
         self.assertEqual(ctx.exception.status_code, 400)
 
-    def test_get_file_list_includes_test_doc(self):
-        """get_file_list returns document stems including the test file."""
+    @patch("core.get_uploaded_files.list_document_filenames")
+    def test_get_file_list_includes_test_doc(self, mock_list):
+        """get_file_list returns document names from Supabase."""
+        mock_list.return_value = [self.test_pdf_name]
         files = get_file_list()
         self.assertIn(self.test_pdf_name, files)
 

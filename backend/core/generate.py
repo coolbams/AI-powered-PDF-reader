@@ -6,6 +6,9 @@ import os
 load_dotenv()
 
 MAX_HISTORY_TOKENS = 4000
+
+LLM_MODEL_NAME = os.getenv("LLM") or "openai/gpt-oss-20b"
+
 enc = tiktoken.get_encoding("o200k_base")
 
 _client = None
@@ -40,8 +43,9 @@ def generate_response(prompt: str, history: list[dict] | None = None) -> str:
         messages.extend(_trim_history(history))
     messages.append({"role": "user", "content": prompt})
 
+    model_name = os.getenv("LLM") or LLM_MODEL_NAME or "openai/gpt-oss-20b"
     response = get_client().chat.completions.create(
-        model="openai/gpt-oss-20b",
+        model=model_name,
         messages=messages,
         max_tokens=4000,
         temperature=0.3,
@@ -57,8 +61,9 @@ def stream_response(prompt: str, history: list[dict] | None = None):
         messages.extend(_trim_history(history))
     messages.append({"role": "user", "content": prompt})
 
+    model_name = os.getenv("LLM") or LLM_MODEL_NAME or "openai/gpt-oss-20b"
     stream = get_client().chat.completions.create(
-        model="openai/gpt-oss-20b",
+        model=model_name,
         messages=messages,
         max_tokens=4000,
         temperature=0.3,
